@@ -93,7 +93,7 @@ func (r *RuncDriver) Run(ctr Container) (string, int, error) {
 
 // Stop will stop/kill a container
 func (r *RuncDriver) Stop(ctr Container) (string, int, error) {
-	return utils.ExecTimedCmd(r.runcBinary, "kill "+ctr.Name())
+	return utils.ExecTimedCmd(r.runcBinary, "kill "+ctr.Name()+" KILL")
 }
 
 // Remove will remove a container

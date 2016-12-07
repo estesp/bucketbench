@@ -91,6 +91,8 @@ func (bb *BasicBench) runThread(threadNum, iterations int, stats chan RunStatist
 			errCount++
 			log.Warnf("BasicBench: stop error on container %q: %v\n  Output: %s", name, err, out)
 		}
+		// allow time for quiesce of stopped state in process and container executor metadata
+		time.Sleep(50 * time.Millisecond)
 
 		out, rmElapsed, err := bb.driver.Remove(ctr)
 		if err != nil {
