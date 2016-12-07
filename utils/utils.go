@@ -20,12 +20,7 @@ func ResolveBinary(binname string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	//only return no error if the final resolved binary basename
-	//matches what was searched for
-	if filepath.Base(resolvedPath) == binname {
-		return resolvedPath, nil
-	}
-	return "", fmt.Errorf("Binary %q does not resolve to a binary of that name in $PATH (%q)", binname, resolvedPath)
+	return resolvedPath, nil
 }
 
 // ExecTimedCmd executes a command and returns the combined err/out output and any errors
