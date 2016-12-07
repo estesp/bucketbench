@@ -61,7 +61,7 @@ and then report the results to the terminal.`,
 			err         error
 			limitRates  []float64
 			dockerRates []float64
-			//runcRates   []float64
+			runcRates   []float64
 			//ctrRates    []float64
 		)
 		// get thread limit stats
@@ -70,25 +70,26 @@ and then report the results to the terminal.`,
 		if dockerThreads > 0 {
 			// run basic benchmark against Docker
 			dockerRates, err = runDockerBasicBench()
-			log.Errorf("Error during docker basic benchmark execution: %v", err)
-			return err
+			if err != nil {
+				log.Errorf("Error during docker basic benchmark execution: %v", err)
+				return err
+			}
 		}
 		if runcThreads > 0 {
 			// run basic benchmark against runc
+			runcRates, err = runRuncBasicBench()
+			if err != nil {
+				log.Errorf("Error during runc basic benchmark execution: %v", err)
+				return err
+			}
+		}
+		if containerdThreads > 0 {
+			// run basic benchmark against containerd
+		}
 
-		}
-		// OUTPUT RESULTS (move to function)
-		fmt.Printf("             Iter/Thd    1 thrd ")
-		for i := 2; i <= defaultLimitThreads; i++ {
-			fmt.Printf(" %2d thrds", i)
-		}
-		fmt.Printf("\n%-13s   %5d    %6.2f", "Limit", defaultLimitIter, limitRates[0])
-		for i := 1; i < defaultLimitThreads; i++ {
-			fmt.Printf("  %6.2f", limitRates[i])
-		}
-		fmt.Printf("\n\n")
+		// output benchmark results
+		outputRunDetails(limitRates, dockerRates, runcRates)
 
-		fmt.Printf("Docker rates: %v\n", dockerRates)
 		log.Info("Benchmark runs complete")
 		return nil
 	},
@@ -127,6 +128,46 @@ func runDockerBasicBench() ([]float64, error) {
 		log.Infof("Docker Basic: threads %d, iterations %d, rate: %6.2f", i, dockerIter, rate)
 	}
 	return rates, nil
+}
+
+func runRuncBasicBench() ([]float64, error) {
+	var rates []float64
+	for i := 1; i <= runcThreads; i++ {
+		basic, _ := benches.New(benches.Basic)
+		err := basic.Init(driver.Runc, runcBinary, runcBundle)
+		if err != nil {
+			return []float64{}, err
+		}
+		err = basic.Run(i, runcIter)
+		if err != nil {
+			return []float64{}, fmt.Errorf("Error during basic bench run: %v", err)
+		}
+		duration := basic.Elapsed()
+		rate := float64(i*runcIter) / duration.Seconds()
+		rates = append(rates, rate)
+		log.Infof("Runc Basic: threads %d, iterations %d, rate: %6.2f", i, runcIter, rate)
+	}
+	return rates, nil
+}
+
+func outputRunDetails(limitRates, dockerRates, runcRates []float64) {
+	fmt.Printf("             Iter/Thd    1 thrd ")
+	for i := 2; i <= defaultLimitThreads; i++ {
+		fmt.Printf(" %2d thrds", i)
+	}
+	fmt.Printf("\n%-13s   %5d    %6.2f", "Limit", defaultLimitIter, limitRates[0])
+	for i := 1; i < defaultLimitThreads; i++ {
+		fmt.Printf("  %6.2f", limitRates[i])
+	}
+	fmt.Printf("\n%-13s   %5d    %6.2f", "DockerBasic", dockerIter, dockerRates[0])
+	for i := 1; i < dockerThreads; i++ {
+		fmt.Printf("  %6.2f", dockerRates[i])
+	}
+	fmt.Printf("\n%-13s   %5d    %6.2f", "RuncBasic", runcIter, runcRates[0])
+	for i := 1; i < runcThreads; i++ {
+		fmt.Printf("  %6.2f", runcRates[i])
+	}
+	fmt.Printf("\n\n")
 }
 
 func init() {
