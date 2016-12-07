@@ -88,7 +88,7 @@ func (r *RuncDriver) Run(ctr Container) (string, int, error) {
 		detached = "--detach"
 	}
 	args := fmt.Sprintf("run %s --bundle %s %s", detached, ctr.Image(), ctr.Name())
-	return utils.ExecTimedCmd(r.runcBinary, args)
+	return utils.ExecTimedCmdNoOut(r.runcBinary, args)
 }
 
 // Stop will stop/kill a container

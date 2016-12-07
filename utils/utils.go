@@ -22,14 +22,28 @@ func ResolveBinary(binname string) (string, error) {
 	return resolvedPath, nil
 }
 
+// ExecTimedCmdNoOut executes a command and returns any errors, but ignores output
+// This function also times the command and returns the elapsed milliseconds
+func ExecTimedCmdNoOut(cmd, args string) (string, int, error) {
+	start := time.Now()
+	execCmd := exec.Command(cmd, strings.Split(args, " ")...)
+	execCmd.Stdin = nil
+	execCmd.Stdout = nil
+	execCmd.Stderr = nil
+	err := execCmd.Run()
+	elapsed := time.Since(start)
+	msElapsed := int(elapsed.Nanoseconds() / 1000000)
+	return "", msElapsed, err
+}
+
 // ExecTimedCmd executes a command and returns the combined err/out output and any errors
 // This function also times the command and returns the elapsed milliseconds
 func ExecTimedCmd(cmd, args string) (string, int, error) {
 	start := time.Now()
 	execCmd := exec.Command(cmd, strings.Split(args, " ")...)
+	out, err := execCmd.CombinedOutput()
 	elapsed := time.Since(start)
 	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-	out, err := execCmd.CombinedOutput()
 	return string(out), msElapsed, err
 }
 
