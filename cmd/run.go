@@ -159,13 +159,17 @@ func outputRunDetails(limitRates, dockerRates, runcRates []float64) {
 	for i := 1; i < defaultLimitThreads; i++ {
 		fmt.Printf("  %6.2f", limitRates[i])
 	}
-	fmt.Printf("\n%-13s   %5d    %6.2f", "DockerBasic", dockerIter, dockerRates[0])
-	for i := 1; i < dockerThreads; i++ {
-		fmt.Printf("  %6.2f", dockerRates[i])
+	if dockerThreads > 0 {
+		fmt.Printf("\n%-13s   %5d    %6.2f", "DockerBasic", dockerIter, dockerRates[0])
+		for i := 1; i < dockerThreads; i++ {
+			fmt.Printf("  %6.2f", dockerRates[i])
+		}
 	}
-	fmt.Printf("\n%-13s   %5d    %6.2f", "RuncBasic", runcIter, runcRates[0])
-	for i := 1; i < runcThreads; i++ {
-		fmt.Printf("  %6.2f", runcRates[i])
+	if runcThreads > 0 {
+		fmt.Printf("\n%-13s   %5d    %6.2f", "RuncBasic", runcIter, runcRates[0])
+		for i := 1; i < runcThreads; i++ {
+			fmt.Printf("  %6.2f", runcRates[i])
+		}
 	}
 	fmt.Printf("\n\n")
 }
