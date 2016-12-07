@@ -76,7 +76,9 @@ func New(btype Type) (Bench, error) {
 			state: Created,
 		}, nil
 	case Basic:
-		return nil, fmt.Errorf("Basic benchmark not implemented.")
+		return &BasicBench{
+			state: Created,
+		}, nil
 	case Full:
 		return nil, fmt.Errorf("Full benchmark not implemented.")
 	default:

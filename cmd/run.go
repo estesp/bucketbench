@@ -34,6 +34,9 @@ const (
 	defaultContainerdBinary  = "ctr"
 	defaultDockerImage       = "busybox"
 	defaultRuncBundle        = "."
+
+	dockerIter = 15
+	runcIter   = 50
 )
 
 var (
@@ -54,30 +57,76 @@ command will run those number of threads with the pre-defined lifecycle commands
 and then report the results to the terminal.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		var rates []float64
+		var (
+			err         error
+			limitRates  []float64
+			dockerRates []float64
+			//runcRates   []float64
+			//ctrRates    []float64
+		)
 		// get thread limit stats
-		for i := 1; i <= defaultLimitThreads; i++ {
-			limit, _ := benches.New(benches.Limit)
-			limit.Init(driver.Null, "", "")
-			limit.Run(i, defaultLimitIter)
-			duration := limit.Elapsed()
-			rate := float64(i*defaultLimitIter) / duration.Seconds()
-			rates = append(rates, rate)
-			log.Infof("threads %d, iterations %d, rate: %6.2f", i, defaultLimitIter, rate)
+		limitRates = runLimitTest()
+
+		if dockerThreads > 0 {
+			// run basic benchmark against Docker
+			dockerRates, err = runDockerBasicBench()
+			log.Errorf("Error during docker basic benchmark execution: %v", err)
+			return err
 		}
+		if runcThreads > 0 {
+			// run basic benchmark against runc
+
+		}
+		// OUTPUT RESULTS (move to function)
 		fmt.Printf("             Iter/Thd    1 thrd ")
 		for i := 2; i <= defaultLimitThreads; i++ {
 			fmt.Printf(" %2d thrds", i)
 		}
-		fmt.Printf("\n%-13s   %5d    %6.2f", "Limit", defaultLimitIter, rates[0])
+		fmt.Printf("\n%-13s   %5d    %6.2f", "Limit", defaultLimitIter, limitRates[0])
 		for i := 1; i < defaultLimitThreads; i++ {
-			fmt.Printf("  %6.2f", rates[i])
+			fmt.Printf("  %6.2f", limitRates[i])
 		}
 		fmt.Printf("\n\n")
 
+		fmt.Printf("Docker rates: %v\n", dockerRates)
 		log.Info("Benchmark runs complete")
 		return nil
 	},
+}
+
+func runLimitTest() []float64 {
+	var rates []float64
+	// get thread limit stats
+	for i := 1; i <= defaultLimitThreads; i++ {
+		limit, _ := benches.New(benches.Limit)
+		limit.Init(driver.Null, "", "")
+		limit.Run(i, defaultLimitIter)
+		duration := limit.Elapsed()
+		rate := float64(i*defaultLimitIter) / duration.Seconds()
+		rates = append(rates, rate)
+		log.Infof("Limit: threads %d, iterations %d, rate: %6.2f", i, defaultLimitIter, rate)
+	}
+	return rates
+}
+
+func runDockerBasicBench() ([]float64, error) {
+	var rates []float64
+	for i := 1; i <= dockerThreads; i++ {
+		basic, _ := benches.New(benches.Basic)
+		err := basic.Init(driver.Docker, dockerBinary, dockerImage)
+		if err != nil {
+			return []float64{}, err
+		}
+		err = basic.Run(i, dockerIter)
+		if err != nil {
+			return []float64{}, fmt.Errorf("Error during basic bench run: %v", err)
+		}
+		duration := basic.Elapsed()
+		rate := float64(i*dockerIter) / duration.Seconds()
+		rates = append(rates, rate)
+		log.Infof("Docker Basic: threads %d, iterations %d, rate: %6.2f", i, dockerIter, rate)
+	}
+	return rates, nil
 }
 
 func init() {

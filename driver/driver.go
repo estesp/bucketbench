@@ -38,7 +38,7 @@ type Driver interface {
 	Type() Type
 
 	// Info returns a string with information about the container engine/runtime details
-	Info() string
+	Info() (string, error)
 
 	// Create will create a container instance matching the specific needs
 	// of a driver

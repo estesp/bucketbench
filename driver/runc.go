@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/estesp/dockerbench/utils"
-	log "github.com/sirupsen/logrus"
 )
 
 // RuncDriver is an implementation of the driver interface for Runc
@@ -62,15 +61,13 @@ func (r *RuncDriver) Type() Type {
 }
 
 // Info returns
-func (r *RuncDriver) Info() string {
+func (r *RuncDriver) Info() (string, error) {
 	info := "runc driver (binary: " + r.runcBinary + ")\n"
 	versionInfo, err := utils.ExecCmd(r.runcBinary, "--v")
 	if err != nil {
-		log.Warnf("error trying to get runc version info: %v", err)
-	} else {
-		info = info + versionInfo
+		return "", fmt.Errorf("Error trying to retrieve runc version info: %v", err)
 	}
-	return info
+	return info + versionInfo, nil
 }
 
 // Create will create a container instance matching the specific needs
