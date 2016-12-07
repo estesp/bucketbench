@@ -66,7 +66,7 @@ func (d *DockerDriver) Info() (string, error) {
 	info := "docker driver (binary: " + d.dockerBinary + ")\n"
 	versionInfo, err := utils.ExecCmd(d.dockerBinary, "version")
 	if err != nil {
-		return "", fmt.Errorf("Error trying to retrieve runc version info: %v", err)
+		return "", fmt.Errorf("Error trying to retrieve docker version info: %v", err)
 	}
 	return info + versionInfo, nil
 }

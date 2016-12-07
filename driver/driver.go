@@ -69,7 +69,7 @@ func New(dtype Type, binaryPath string) (Driver, error) {
 	case Runc:
 		return NewRuncDriver(binaryPath)
 	case Docker:
-		return nil, fmt.Errorf("Docker driver unimplemented")
+		return NewDockerDriver(binaryPath)
 	case Containerd:
 		return nil, fmt.Errorf("Containerd driver unimplemented")
 	case Null:
