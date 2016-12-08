@@ -9,7 +9,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// DockerDriver is an implementation of the driver interface for the Docker engine
+// DockerDriver is an implementation of the driver interface for the Docker engine.
+// IMPORTANT: This implementation does not protect instance metadata for thread safely.
+// At this time there is no understood use case for multi-threaded use of this implementation.
 type DockerDriver struct {
 	dockerBinary string
 	dockerInfo   string

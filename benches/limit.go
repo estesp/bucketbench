@@ -9,7 +9,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// LimitBench only checks per-thread throughput as a baseline for other runs
+// LimitBench only checks per-thread throughput as a baseline for comparison to runs on
+// other hardware/environments.
+// IMPORTANT: This implementation does not protect instance metadata for thread safely.
+// At this time there is no understood use case for multi-threaded use of this implementation.
 type LimitBench struct {
 	stats   []RunStatistics
 	elapsed time.Duration
