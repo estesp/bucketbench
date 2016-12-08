@@ -1,14 +1,19 @@
 package driver
 
 import (
+	"bufio"
 	"fmt"
+	"strings"
+	"sync"
 
 	"github.com/estesp/dockerbench/utils"
 )
 
 // DockerDriver is an implementation of the driver interface for the Docker engine
 type DockerDriver struct {
+	once         sync.Once
 	dockerBinary string
+	dockerInfo   string
 }
 
 // DockerContainer is an implementation of the container metadata needed for docker
@@ -63,12 +68,18 @@ func (d *DockerDriver) Type() Type {
 
 // Info returns
 func (d *DockerDriver) Info() (string, error) {
-	info := "docker driver (binary: " + d.dockerBinary + ")\n"
-	versionInfo, err := utils.ExecCmd(d.dockerBinary, "version")
-	if err != nil {
-		return "", fmt.Errorf("Error trying to retrieve docker version info: %v", err)
+	if d.dockerInfo != "" {
+		return d.dockerInfo, nil
 	}
-	return info + versionInfo, nil
+
+	infoStart := "docker driver (binary: " + d.dockerBinary + ")\n"
+	version, err := utils.ExecCmd(d.dockerBinary, "version")
+	info, err := utils.ExecCmd(d.dockerBinary, "info")
+	if err != nil {
+		return "", fmt.Errorf("Error trying to retrieve docker daemon info: %v", err)
+	}
+	d.dockerInfo = infoStart + parseDaemonInfo(version, info)
+	return d.dockerInfo, nil
 }
 
 // Create will create a container instance matching the specific needs
@@ -110,4 +121,57 @@ func (d *DockerDriver) Pause(ctr Container) (string, int, error) {
 // Unpause will unpause/resume a container
 func (d *DockerDriver) Unpause(ctr Container) (string, int, error) {
 	return utils.ExecTimedCmd(d.dockerBinary, "unpause "+ctr.Name())
+}
+
+// return a condensed string of version and daemon information
+func parseDaemonInfo(version, info string) string {
+	var (
+		clientVer string
+		clientAPI string
+		serverVer string
+	)
+	vReader := strings.NewReader(version)
+	vScan := bufio.NewScanner(vReader)
+
+	for vScan.Scan() {
+		line := vScan.Text()
+		parts := strings.Split(line, ":")
+		switch strings.TrimSpace(parts[0]) {
+		case "Version":
+			if clientVer == "" {
+				// first time is client
+				clientVer = strings.TrimSpace(parts[1])
+			} else {
+				serverVer = strings.TrimSpace(parts[1])
+			}
+		case "API version":
+			if clientAPI == "" {
+				// first instance is client
+				clientAPI = parts[1]
+				clientVer = clientVer + "|API:" + strings.TrimSpace(parts[1])
+			} else {
+				serverVer = serverVer + "|API:" + strings.TrimSpace(parts[1])
+			}
+		default:
+		}
+
+	}
+	iReader := strings.NewReader(info)
+	iScan := bufio.NewScanner(iReader)
+
+	for iScan.Scan() {
+		line := iScan.Text()
+		parts := strings.Split(line, ":")
+		switch strings.TrimSpace(parts[0]) {
+		case "Kernel Version":
+			serverVer = serverVer + "|Kernel:" + strings.TrimSpace(parts[1])
+		case "Storage Driver":
+			serverVer = serverVer + "|Storage:" + strings.TrimSpace(parts[1])
+		case "Backing Filesystem":
+			serverVer = serverVer + "|BackingFS:" + strings.TrimSpace(parts[1])
+		default:
+		}
+
+	}
+	return fmt.Sprintf("[CLIENT:%s][SERVER:%s]", clientVer, serverVer)
 }
