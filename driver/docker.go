@@ -4,14 +4,13 @@ import (
 	"bufio"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/estesp/dockerbench/utils"
+	log "github.com/sirupsen/logrus"
 )
 
 // DockerDriver is an implementation of the driver interface for the Docker engine
 type DockerDriver struct {
-	once         sync.Once
 	dockerBinary string
 	dockerInfo   string
 }
@@ -90,6 +89,24 @@ func (d *DockerDriver) Create(name, image string, detached bool) (Container, err
 
 // Clean will clean the environment; removing any remaining containers in the runc metadata
 func (d *DockerDriver) Clean() error {
+	// make sure some default images are pulled
+	log.Info("Pulling busybox image")
+	out, err := utils.ExecCmd(d.dockerBinary, "pull busybox")
+	if err != nil {
+		return fmt.Errorf("Can't pull busybox image: %v (output: %s)", err, out)
+	}
+	log.Info("Pulling redis image")
+	out, err = utils.ExecCmd(d.dockerBinary, "pull redis")
+	if err != nil {
+		return fmt.Errorf("Can't pull redis image: %v (output: %s)", err, out)
+	}
+	// clean up any containers from a prior run
+	log.Info("Clearing docker daemon exited containers")
+	cmd := "docker rm -f `docker ps -aq`"
+	out, err = utils.ExecCmd("bash", "-c "+cmd)
+	if err != nil {
+		log.Warnf("Couldn't clean up docker daemon containers: %v (output: %s)", err, out)
+	}
 	return nil
 }
 
