@@ -124,7 +124,7 @@ func (d *DockerDriver) Run(ctr Container) (string, int, error) {
 
 // Stop will stop/kill a container
 func (d *DockerDriver) Stop(ctr Container) (string, int, error) {
-	return utils.ExecTimedCmd(d.dockerBinary, "stop "+ctr.Name())
+	return utils.ExecTimedCmd(d.dockerBinary, "kill "+ctr.Name())
 }
 
 // Remove will remove a container
