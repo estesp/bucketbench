@@ -75,7 +75,7 @@ func New(dtype Type, binaryPath string) (Driver, error) {
 	case Docker:
 		return NewDockerDriver(binaryPath)
 	case Containerd:
-		return nil, fmt.Errorf("Containerd driver unimplemented")
+		return NewContainerdDriver(binaryPath)
 	case Null:
 		return nil, nil
 	default:

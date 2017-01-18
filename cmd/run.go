@@ -35,8 +35,9 @@ const (
 	defaultDockerImage       = "busybox"
 	defaultRuncBundle        = "."
 
-	dockerIter = 15
-	runcIter   = 50
+	dockerIter     = 15
+	runcIter       = 50
+	containerdIter = 50
 )
 
 var (
@@ -116,6 +117,19 @@ and then report the results to the terminal.`,
 		}
 		if containerdThreads > 0 {
 			// run basic benchmark against containerd
+			containerdRates, err := runContainerdBasicBench()
+			if err != nil {
+				log.Errorf("Error during containerd basic benchmark execution: %v", err)
+				return err
+			}
+			containerdResult := benchResult{
+				name:        "ContainerdBasic",
+				threads:     containerdThreads,
+				iterations:  containerdIter,
+				threadRates: containerdRates,
+			}
+			results = append(results, containerdResult)
+			maxThreads = intMax(maxThreads, containerdThreads)
 		}
 
 		// output benchmark results
@@ -177,6 +191,26 @@ func runRuncBasicBench() ([]float64, error) {
 		rate := float64(i*runcIter) / duration.Seconds()
 		rates = append(rates, rate)
 		log.Infof("Runc Basic: threads %d, iterations %d, rate: %6.2f", i, runcIter, rate)
+	}
+	return rates, nil
+}
+
+func runContainerdBasicBench() ([]float64, error) {
+	var rates []float64
+	for i := 1; i <= containerdThreads; i++ {
+		basic, _ := benches.New(benches.Basic)
+		err := basic.Init(driver.Containerd, containerdBinary, runcBundle, trace)
+		if err != nil {
+			return []float64{}, err
+		}
+		err = basic.Run(i, containerdIter)
+		if err != nil {
+			return []float64{}, fmt.Errorf("Error during basic bench run: %v", err)
+		}
+		duration := basic.Elapsed()
+		rate := float64(i*runcIter) / duration.Seconds()
+		rates = append(rates, rate)
+		log.Infof("Containerd Basic: threads %d, iterations %d, rate: %6.2f", i, containerdIter, rate)
 	}
 	return rates, nil
 }
