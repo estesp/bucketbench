@@ -22,6 +22,7 @@ type DockerContainer struct {
 	name      string
 	imageName string
 	detached  bool
+	trace     bool
 }
 
 // NewDockerDriver creates an instance of the docker driver, providing a path to the docker client binary
@@ -39,11 +40,12 @@ func NewDockerDriver(binaryPath string) (Driver, error) {
 
 // newDockerContainer creates the metadata object of a docker-specific container with
 // image name, container runtime name, and any required additional information
-func newDockerContainer(name, image string, detached bool) Container {
+func newDockerContainer(name, image string, detached bool, trace bool) Container {
 	return &DockerContainer{
 		name:      name,
 		imageName: image,
 		detached:  detached,
+		trace:     trace,
 	}
 }
 
@@ -55,6 +57,11 @@ func (c *DockerContainer) Name() string {
 // Detached returns whether the container should be started in detached mode
 func (c *DockerContainer) Detached() bool {
 	return c.detached
+}
+
+// Trace returns whether the container should be started with tracing enabled
+func (c *DockerContainer) Trace() bool {
+	return c.trace
 }
 
 // Image returns the image name that Docker will use
@@ -85,8 +92,8 @@ func (d *DockerDriver) Info() (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (d *DockerDriver) Create(name, image string, detached bool) (Container, error) {
-	return newDockerContainer(name, image, detached), nil
+func (d *DockerDriver) Create(name, image string, detached bool, trace bool) (Container, error) {
+	return newDockerContainer(name, image, detached, trace), nil
 }
 
 // Clean will clean the environment; removing any remaining containers in the runc metadata

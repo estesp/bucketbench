@@ -48,7 +48,7 @@ type Bench interface {
 
 	// Init initializes the benchmark (for example, verifies a daemon is running for daemon-centric
 	// engines, pre-pulls images, etc.)
-	Init(driverType driver.Type, binaryPath, imageInfo string) error
+	Init(driverType driver.Type, binaryPath, imageInfo string, trace bool) error
 
 	// Run executes the specified # of iterations against a specified # of
 	// threads per benchmark against a specific engine driver type and collects
@@ -80,7 +80,7 @@ func New(btype Type) (Bench, error) {
 			state: Created,
 		}, nil
 	case Full:
-		return nil, fmt.Errorf("Full benchmark not implemented.")
+		return nil, fmt.Errorf("full benchmark not implemented")
 	default:
 		return nil, fmt.Errorf("No such benchmark type: %v", btype)
 	}

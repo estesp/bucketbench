@@ -23,6 +23,7 @@ type RuncContainer struct {
 	detached   bool
 	state      string
 	pid        string
+	trace      bool
 }
 
 // NewRuncDriver creates an instance of the runc driver, providing a path to runc
@@ -39,11 +40,12 @@ func NewRuncDriver(binaryPath string) (Driver, error) {
 
 // newRuncContainer creates the metadata object of a runc-specific container with
 // bundle, name, and any required additional information
-func newRuncContainer(name, bundlepath string, detached bool) Container {
+func newRuncContainer(name, bundlepath string, detached bool, trace bool) Container {
 	return &RuncContainer{
 		name:       name,
 		bundlePath: bundlepath,
 		detached:   detached,
+		trace:      trace,
 	}
 }
 
@@ -55,6 +57,11 @@ func (c *RuncContainer) Name() string {
 // Detached returns whether the container should be started in detached mode
 func (c *RuncContainer) Detached() bool {
 	return c.detached
+}
+
+// Trace returns whether the container should be started with tracing enabled
+func (c *RuncContainer) Trace() bool {
+	return c.trace
 }
 
 // Image returns the bundle path that runc will use
@@ -90,8 +97,8 @@ func (r *RuncDriver) Info() (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (r *RuncDriver) Create(name, image string, detached bool) (Container, error) {
-	return newRuncContainer(name, image, detached), nil
+func (r *RuncDriver) Create(name, image string, detached bool, trace bool) (Container, error) {
+	return newRuncContainer(name, image, detached, trace), nil
 }
 
 // Clean will clean the environment; removing any remaining containers in the runc metadata
@@ -99,7 +106,7 @@ func (r *RuncDriver) Clean() error {
 	var tries int
 	out, err := utils.ExecCmd(r.runcBinary, "list")
 	if err != nil {
-		return fmt.Errorf("Error getting runc list output: %v", err)
+		return fmt.Errorf("Error getting runc list output: (err: %v) output: %s", err, out)
 	}
 	// try up to 3 times to handle any remaining containers in the runc list
 	containers := parseRuncList(out)
@@ -141,11 +148,18 @@ func (r *RuncDriver) Clean() error {
 // the container will be ignored given this is for benchmarking not validating container
 // operation.
 func (r *RuncDriver) Run(ctr Container) (string, int, error) {
-	var detached string
+	var (
+		detached string
+		trace    string
+	)
 	if ctr.Detached() {
 		detached = "--detach"
 	}
-	args := fmt.Sprintf("run %s --bundle %s %s", detached, ctr.Image(), ctr.Name())
+	if ctr.Trace() {
+		trace = fmt.Sprintf("--trace /tmp/%s.trace ", ctr.Name())
+	}
+
+	args := fmt.Sprintf("%srun %s --bundle %s %s", trace, detached, ctr.Image(), ctr.Name())
 	// the "NoOut" variant of ExecTimedCmd ignores stdin/out/err (sets them to /dev/null)
 	return utils.ExecTimedCmdNoOut(r.runcBinary, args)
 }

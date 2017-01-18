@@ -48,6 +48,7 @@ var (
 	containerdBinary  string
 	dockerImage       string
 	runcBundle        string
+	trace             bool
 )
 
 // simple structure to handle collecting output data which will be displayed
@@ -130,7 +131,7 @@ func runLimitTest() []float64 {
 	// get thread limit stats
 	for i := 1; i <= defaultLimitThreads; i++ {
 		limit, _ := benches.New(benches.Limit)
-		limit.Init(driver.Null, "", "")
+		limit.Init(driver.Null, "", "", trace)
 		limit.Run(i, defaultLimitIter)
 		duration := limit.Elapsed()
 		rate := float64(i*defaultLimitIter) / duration.Seconds()
@@ -144,7 +145,7 @@ func runDockerBasicBench() ([]float64, error) {
 	var rates []float64
 	for i := 1; i <= dockerThreads; i++ {
 		basic, _ := benches.New(benches.Basic)
-		err := basic.Init(driver.Docker, dockerBinary, dockerImage)
+		err := basic.Init(driver.Docker, dockerBinary, dockerImage, trace)
 		if err != nil {
 			return []float64{}, err
 		}
@@ -164,7 +165,7 @@ func runRuncBasicBench() ([]float64, error) {
 	var rates []float64
 	for i := 1; i <= runcThreads; i++ {
 		basic, _ := benches.New(benches.Basic)
-		err := basic.Init(driver.Runc, runcBinary, runcBundle)
+		err := basic.Init(driver.Runc, runcBinary, runcBundle, trace)
 		if err != nil {
 			return []float64{}, err
 		}
@@ -211,4 +212,5 @@ func init() {
 	runCmd.PersistentFlags().StringVarP(&containerdBinary, "ctr-binary", "", defaultContainerdBinary, "Name/path of containerd client (ctr) binary")
 	runCmd.PersistentFlags().StringVarP(&dockerImage, "image", "i", defaultDockerImage, "Name of test Docker image")
 	runCmd.PersistentFlags().StringVarP(&runcBundle, "bundle", "b", defaultRuncBundle, "Path of test runc image bundle")
+	runCmd.PersistentFlags().BoolVarP(&trace, "trace", "t", false, "Enable per-container tracing during benchmark runs")
 }

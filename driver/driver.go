@@ -25,6 +25,10 @@ type Container interface {
 	// Detached returns whether the container is to be started in detached state
 	Detached() bool
 
+	// Trace returns whether the container should be traced (using any tracing supported
+	// by the container runtime)
+	Trace() bool
+
 	// Image returns either a bundle path (used by runc, containerd) or image name (used by Docker)
 	// that will be used by the container runtime to know what image to run/execute
 	Image() string
@@ -42,7 +46,7 @@ type Driver interface {
 
 	// Create will create a container instance matching the specific needs
 	// of a driver
-	Create(name, image string, detached bool) (Container, error)
+	Create(name, image string, detached bool, trace bool) (Container, error)
 
 	// Clean will clean the operating environment of a specific driver
 	Clean() error

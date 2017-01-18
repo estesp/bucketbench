@@ -13,6 +13,7 @@ import (
 type BasicBench struct {
 	driver    driver.Driver
 	imageInfo string
+	trace     bool
 	stats     []RunStatistics
 	elapsed   time.Duration
 	state     State
@@ -20,7 +21,7 @@ type BasicBench struct {
 }
 
 // Init initializes the benchmark
-func (bb *BasicBench) Init(driverType driver.Type, binaryPath, imageInfo string) error {
+func (bb *BasicBench) Init(driverType driver.Type, binaryPath, imageInfo string, trace bool) error {
 	driver, err := driver.New(driverType, binaryPath)
 	if err != nil {
 		return fmt.Errorf("Error during driver initialization for BasicBench: %v", err)
@@ -39,6 +40,7 @@ func (bb *BasicBench) Init(driverType driver.Type, binaryPath, imageInfo string)
 	}
 	bb.imageInfo = imageInfo
 	bb.driver = driver
+	bb.trace = trace
 	return nil
 }
 
@@ -78,7 +80,7 @@ func (bb *BasicBench) runThread(threadNum, iterations int, stats chan RunStatist
 		)
 		// commands are create, run, remove
 		name := fmt.Sprintf("bb-ctr-%d-%d", threadNum, i)
-		ctr, err := bb.driver.Create(name, bb.imageInfo, true)
+		ctr, err := bb.driver.Create(name, bb.imageInfo, true, bb.trace)
 
 		out, runElapsed, err := bb.driver.Run(ctr)
 		if err != nil {
