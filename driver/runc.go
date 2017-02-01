@@ -202,6 +202,10 @@ func parseRuncList(listOutput string) []*RuncContainer {
 			log.Warnf("runc list parsing found invalid line: %q", line)
 			continue
 		}
+		// don't delete containers that aren't part of our benchmark run!
+		if !strings.Contains(parts[0], "bb-") {
+			continue
+		}
 		ctr := &RuncContainer{
 			name:       parts[0],
 			bundlePath: parts[3],
