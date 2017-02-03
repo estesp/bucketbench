@@ -216,14 +216,14 @@ func runContainerdBasicBench() ([]float64, error) {
 }
 
 func outputRunDetails(maxThreads int, results []benchResult) {
-	fmt.Printf("             Iter/Thd    1 thrd ")
+	fmt.Printf("             Iter/Thd     1 thrd")
 	for i := 2; i <= maxThreads; i++ {
 		fmt.Printf(" %2d thrds", i)
 	}
 	for _, result := range results {
-		fmt.Printf("\n%-13s   %5d    %6.2f", result.name, result.iterations, result.threadRates[0])
+		fmt.Printf("\n%-15s %5d    %7.2f", result.name, result.iterations, result.threadRates[0])
 		for i := 1; i < result.threads; i++ {
-			fmt.Printf("  %6.2f", result.threadRates[i])
+			fmt.Printf("  %7.2f", result.threadRates[i])
 		}
 	}
 	fmt.Printf("\n\n")
