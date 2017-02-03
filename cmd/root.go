@@ -1,4 +1,4 @@
-// Copyright © 2016 Phil Estes
+// Copyright © 2017 Phil Estes
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ var logLevel string
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
-	Use:   "dockerbench",
+	Use:   "bucketbench",
 	Short: "Run container operation benchmarks against Docker, runc, and containerd",
 	Long: `This program can drive multi-threaded simple container lifecycle operations
 against the Docker engine, containerd, and the runc command line utility and report

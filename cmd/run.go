@@ -17,8 +17,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/estesp/dockerbench/benches"
-	"github.com/estesp/dockerbench/driver"
+	"github.com/estesp/bucketbench/benches"
+	"github.com/estesp/bucketbench/driver"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

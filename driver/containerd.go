@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/estesp/dockerbench/utils"
+	"github.com/estesp/bucketbench/utils"
 	log "github.com/sirupsen/logrus"
 )
 

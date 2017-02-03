@@ -1,4 +1,4 @@
-// Copyright © 2016 Phil Estes
+// Copyright © 2017 Phil Estes
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,8 @@ package main
 import (
 	"os"
 
+	"github.com/estesp/bucketbench/cmd"
 	log "github.com/sirupsen/logrus"
-	"github.com/estesp/dockerbench/cmd"
 )
 
 func main() {

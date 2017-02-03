@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/estesp/dockerbench/driver"
+	"github.com/estesp/bucketbench/driver"
 	log "github.com/sirupsen/logrus"
 )
 

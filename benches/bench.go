@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/estesp/dockerbench/driver"
+	"github.com/estesp/bucketbench/driver"
 )
 
 // State represents the state of a benchmark object
