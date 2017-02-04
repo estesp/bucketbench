@@ -104,3 +104,5 @@ well.
  - Better design of statistics being gathered (and currently unused) for each operation's metrics;
    currently hardcoded for "basic" benchmark list of operations and would not be useful anywhere else.
  - Revisit setup/cleanup hardcoded actions that may or may not be valid in the general case.
+ - Decide what to do with the `-trace` flag, which was only useful with a private build of `runc`
+   which generated Go pprof traces. Possibly submit trace support to upstream runc.
