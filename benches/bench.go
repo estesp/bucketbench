@@ -50,6 +50,10 @@ type Bench interface {
 	// engines, pre-pulls images, etc.)
 	Init(driverType driver.Type, binaryPath, imageInfo string, trace bool) error
 
+	//Validates the any condition that need to be checked before actual banchmark run.
+	//Helpful in testing operations required in benchmark for single run.
+	Validate() error
+
 	// Run executes the specified # of iterations against a specified # of
 	// threads per benchmark against a specific engine driver type and collects
 	// the statistics of each iteration and thread

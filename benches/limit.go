@@ -25,6 +25,11 @@ func (lb *LimitBench) Init(driverType driver.Type, binaryPath, imageInfo string,
 	return nil
 }
 
+//Validate the unit of benchmark execution
+func (lb *LimitBench) Validate() error {
+	return nil
+}
+
 // Run executes the benchmark iterations against a specific engine driver type
 // for a specified number of iterations
 func (lb *LimitBench) Run(threads, iterations int) error {

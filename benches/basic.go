@@ -44,6 +44,32 @@ func (bb *BasicBench) Init(driverType driver.Type, binaryPath, imageInfo string,
 	return nil
 }
 
+//Validate the unit of benchmark execution (create-run-stop-remove)
+func (bb *BasicBench) Validate() error {
+	ctr, err := bb.driver.Create("bb-test", bb.imageInfo, true, bb.trace)
+	if err != nil {
+		return fmt.Errorf("Error in Create : %v", err)
+	}
+
+	_, _, err = bb.driver.Run(ctr)
+	if err != nil {
+		return fmt.Errorf("Error in Run : %v", err)
+	}
+
+	_, _, err = bb.driver.Stop(ctr)
+	if err != nil {
+		return fmt.Errorf("Error in Stop : %v", err)
+	}
+	// allow time for quiesce of stopped state in process and container executor metadata
+	time.Sleep(50 * time.Millisecond)
+
+	_, _, err = bb.driver.Remove(ctr)
+	if err != nil {
+		return fmt.Errorf("Error in Remove : %v", err)
+	}
+	return nil
+}
+
 // Run executes the benchmark iterations against a specific engine driver type
 // for a specified number of iterations
 func (bb *BasicBench) Run(threads, iterations int) error {
