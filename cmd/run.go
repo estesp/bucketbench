@@ -163,6 +163,11 @@ func runDockerBasicBench() ([]float64, error) {
 		if err != nil {
 			return []float64{}, err
 		}
+
+		if err = basic.Validate(); err != nil {
+			return []float64{}, fmt.Errorf("Error during basic bench validate: %v", err)
+		}
+
 		err = basic.Run(i, dockerIter)
 		if err != nil {
 			return []float64{}, fmt.Errorf("Error during basic bench run: %v", err)
@@ -183,6 +188,11 @@ func runRuncBasicBench() ([]float64, error) {
 		if err != nil {
 			return []float64{}, err
 		}
+
+		if err = basic.Validate(); err != nil {
+			return []float64{}, err
+		}
+
 		err = basic.Run(i, runcIter)
 		if err != nil {
 			return []float64{}, fmt.Errorf("Error during basic bench run: %v", err)
@@ -203,6 +213,11 @@ func runContainerdBasicBench() ([]float64, error) {
 		if err != nil {
 			return []float64{}, err
 		}
+
+		if err = basic.Validate(); err != nil {
+			return []float64{}, err
+		}
+
 		err = basic.Run(i, containerdIter)
 		if err != nil {
 			return []float64{}, fmt.Errorf("Error during basic bench run: %v", err)
