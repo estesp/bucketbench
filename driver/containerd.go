@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/estesp/bucketbench/utils"
-	log "github.com/sirupsen/logrus"
 )
 
 // ContainerdDriver is an implementation of the driver interface for using Containerd.

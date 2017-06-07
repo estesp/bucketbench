@@ -1,6 +1,0 @@
-{
-	"ImportPath": "github.com/estesp/dockerbench/Godeps",
-	"GoVersion": "go1.7",
-	"GodepVersion": "v75",
-	"Deps": []
-}

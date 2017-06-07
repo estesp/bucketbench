@@ -4,9 +4,9 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/estesp/bucketbench/driver"
 	"github.com/estesp/bucketbench/utils"
-	log "github.com/sirupsen/logrus"
 )
 
 // LimitBench only checks per-thread throughput as a baseline for comparison to runs on
