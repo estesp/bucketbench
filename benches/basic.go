@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/estesp/bucketbench/driver"
-	log "github.com/sirupsen/logrus"
 )
 
 // BasicBench benchmark runs create, run, remove operations on a simple container
