@@ -31,7 +31,8 @@ const (
 	defaultContainerdThreads = 0
 	defaultDockerBinary      = "docker"
 	defaultRuncBinary        = "runc"
-	defaultContainerdBinary  = "ctr"
+	defaultCtrBinary         = "ctr"
+	defaultContainerdPath    = "/run/containerd/containerd.sock"
 	defaultDockerImage       = "busybox"
 	defaultRuncBundle        = "."
 
@@ -46,10 +47,13 @@ var (
 	containerdThreads int
 	dockerBinary      string
 	runcBinary        string
-	containerdBinary  string
+	ctrBinary         string
+	containerdPath    string
 	dockerImage       string
 	runcBundle        string
 	trace             bool
+	legacyCtr         bool
+	skipLimit         bool
 )
 
 // simple structure to handle collecting output data which will be displayed
@@ -73,15 +77,19 @@ and then report the results to the terminal.`,
 			maxThreads = defaultLimitThreads
 			results    []benchResult
 		)
-		// get thread limit stats
-		limitRates := runLimitTest()
-		limitResult := benchResult{
-			name:        "Limit",
-			threads:     defaultLimitThreads,
-			iterations:  defaultLimitIter,
-			threadRates: limitRates,
+		if !skipLimit {
+			// get thread limit stats
+			limitRates := runLimitTest()
+			limitResult := benchResult{
+				name:        "Limit",
+				threads:     defaultLimitThreads,
+				iterations:  defaultLimitIter,
+				threadRates: limitRates,
+			}
+			results = append(results, limitResult)
+		} else {
+			maxThreads = 0 // no limit results in output
 		}
-		results = append(results, limitResult)
 
 		if dockerThreads > 0 {
 			// run basic benchmark against Docker
@@ -209,16 +217,25 @@ func runContainerdBasicBench() ([]float64, error) {
 	var rates []float64
 	for i := 1; i <= containerdThreads; i++ {
 		basic, _ := benches.New(benches.Basic)
-		err := basic.Init(driver.Containerd, containerdBinary, runcBundle, trace)
-		if err != nil {
+		if legacyCtr {
+			// use legacy containerd via the "ctr" client binary
+			err := basic.Init(driver.Ctr, ctrBinary, runcBundle, trace)
+			if err != nil {
+				return []float64{}, err
+			}
+		} else {
+			// use the containerd 1.0 release via the gRPC client library
+			err := basic.Init(driver.Containerd, containerdPath, dockerImage, trace)
+			if err != nil {
+				return []float64{}, err
+			}
+		}
+
+		if err := basic.Validate(); err != nil {
 			return []float64{}, err
 		}
 
-		if err = basic.Validate(); err != nil {
-			return []float64{}, err
-		}
-
-		err = basic.Run(i, containerdIter)
+		err := basic.Run(i, containerdIter)
 		if err != nil {
 			return []float64{}, fmt.Errorf("Error during basic bench run: %v", err)
 		}
@@ -258,8 +275,11 @@ func init() {
 	runCmd.PersistentFlags().IntVarP(&containerdThreads, "containerd", "c", defaultContainerdThreads, "Number of threads to execute against containerd")
 	runCmd.PersistentFlags().StringVarP(&dockerBinary, "docker-binary", "", defaultDockerBinary, "Name/path of Docker binary")
 	runCmd.PersistentFlags().StringVarP(&runcBinary, "runc-binary", "", defaultRuncBinary, "Name/path of runc binary")
-	runCmd.PersistentFlags().StringVarP(&containerdBinary, "ctr-binary", "", defaultContainerdBinary, "Name/path of containerd client (ctr) binary")
+	runCmd.PersistentFlags().StringVarP(&ctrBinary, "ctr-binary", "", defaultCtrBinary, "Name/path of legacy containerd client (ctr) binary")
+	runCmd.PersistentFlags().StringVarP(&containerdPath, "ctrd-path", "", defaultContainerdPath, "Socket path of containerd gRPC interface")
 	runCmd.PersistentFlags().StringVarP(&dockerImage, "image", "i", defaultDockerImage, "Name of test Docker image")
 	runCmd.PersistentFlags().StringVarP(&runcBundle, "bundle", "b", defaultRuncBundle, "Path of test runc image bundle")
+	runCmd.PersistentFlags().BoolVarP(&legacyCtr, "legacy-ctr", "l", false, "Enable legacy containerd use via ctr client")
 	runCmd.PersistentFlags().BoolVarP(&trace, "trace", "t", false, "Enable per-container tracing during benchmark runs")
+	runCmd.PersistentFlags().BoolVarP(&skipLimit, "skip-limit", "s", false, "Skip 'limit' benchmark run")
 }
