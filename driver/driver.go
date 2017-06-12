@@ -11,7 +11,11 @@ const (
 	// Runc represents the runc-based driver implementation
 	Runc
 	// Containerd represents the containerd-based driver implementation
+	// using the GRPC API via the containerd client library
 	Containerd
+	// Ctr represents the containerd legacy driver using the `ctr`
+	// binary to drive containerd operations
+	Ctr
 	// Null driver represents an empty driver for use by benchmarks that
 	// require no driver
 	Null
@@ -68,14 +72,16 @@ type Driver interface {
 }
 
 // New creates a driver instance of a specific type
-func New(dtype Type, binaryPath string) (Driver, error) {
+func New(dtype Type, path string) (Driver, error) {
 	switch dtype {
 	case Runc:
-		return NewRuncDriver(binaryPath)
+		return NewRuncDriver(path)
 	case Docker:
-		return NewDockerDriver(binaryPath)
+		return NewDockerDriver(path)
 	case Containerd:
-		return NewContainerdDriver(binaryPath)
+		return NewContainerdDriver(path)
+	case Ctr:
+		return NewCtrDriver(path)
 	case Null:
 		return nil, nil
 	default:
