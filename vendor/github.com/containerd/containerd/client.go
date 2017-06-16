@@ -2,6 +2,7 @@ package containerd
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -19,8 +20,10 @@ import (
 	versionservice "github.com/containerd/containerd/api/services/version"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/plugin"
 	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/remotes/docker"
+	"github.com/containerd/containerd/remotes/docker/schema1"
 	contentservice "github.com/containerd/containerd/services/content"
 	"github.com/containerd/containerd/services/diff"
 	diffservice "github.com/containerd/containerd/services/diff"
@@ -41,30 +44,50 @@ func init() {
 	grpclog.SetLogger(log.New(ioutil.Discard, "", log.LstdFlags))
 }
 
-type NewClientOpts func(c *Client) error
+type clientOpts struct {
+	defaultns string
+}
+
+type ClientOpt func(c *clientOpts) error
+
+func WithDefaultNamespace(ns string) ClientOpt {
+	return func(c *clientOpts) error {
+		c.defaultns = ns
+		return nil
+	}
+}
 
 // New returns a new containerd client that is connected to the containerd
 // instance provided by address
-func New(address string, opts ...NewClientOpts) (*Client, error) {
+func New(address string, opts ...ClientOpt) (*Client, error) {
+	var copts clientOpts
+	for _, o := range opts {
+		if err := o(&copts); err != nil {
+			return nil, err
+		}
+	}
+
 	gopts := []grpc.DialOption{
 		grpc.WithInsecure(),
 		grpc.WithTimeout(100 * time.Second),
 		grpc.WithDialer(dialer),
 	}
+	if copts.defaultns != "" {
+		unary, stream := newNSInterceptors(copts.defaultns)
+		gopts = append(gopts,
+			grpc.WithUnaryInterceptor(unary),
+			grpc.WithStreamInterceptor(stream),
+		)
+	}
+
 	conn, err := grpc.Dial(dialAddress(address), gopts...)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to dial %q", address)
 	}
-	c := &Client{
+	return &Client{
 		conn:    conn,
-		runtime: runtime.GOOS,
-	}
-	for _, o := range opts {
-		if err := o(c); err != nil {
-			return nil, err
-		}
-	}
-	return c, nil
+		runtime: fmt.Sprintf("%s.%s", plugin.RuntimePlugin, runtime.GOOS),
+	}, nil
 }
 
 // Client is the client to interact with containerd and its various services
@@ -72,7 +95,8 @@ func New(address string, opts ...NewClientOpts) (*Client, error) {
 type Client struct {
 	conn *grpc.ClientConn
 
-	runtime string
+	defaultns string
+	runtime   string
 }
 
 func (c *Client) IsServing(ctx context.Context) (bool, error) {
@@ -209,14 +233,15 @@ type RemoteContext struct {
 	// afterwards. Unpacking is required to run an image.
 	Unpack bool
 
-	// PushWrapper allows hooking into the push method. This can be used
-	// track content that is being sent to the remote.
-	PushWrapper func(remotes.Pusher) remotes.Pusher
-
 	// BaseHandlers are a set of handlers which get are called on dispatch.
 	// These handlers always get called before any operation specific
 	// handlers.
 	BaseHandlers []images.Handler
+
+	// ConvertSchema1 is whether to convert Docker registry schema 1
+	// manifests. If this option is false then any image which resolves
+	// to schema 1 will return an error since schema 1 is not supported.
+	ConvertSchema1 bool
 }
 
 func defaultRemoteContext() *RemoteContext {
@@ -235,6 +260,14 @@ func WithPullUnpack(client *Client, c *RemoteContext) error {
 	return nil
 }
 
+// WithSchema1Conversion is used to convert Docker registry schema 1
+// manifests to oci manifests on pull. Without this option schema 1
+// manifests will return a not supported error.
+func WithSchema1Conversion(client *Client, c *RemoteContext) error {
+	c.ConvertSchema1 = true
+	return nil
+}
+
 // WithResolver specifies the resolver to use.
 func WithResolver(resolver remotes.Resolver) RemoteOpts {
 	return func(client *Client, c *RemoteContext) error {
@@ -247,15 +280,6 @@ func WithResolver(resolver remotes.Resolver) RemoteOpts {
 func WithImageHandler(h images.Handler) RemoteOpts {
 	return func(client *Client, c *RemoteContext) error {
 		c.BaseHandlers = append(c.BaseHandlers, h)
-		return nil
-	}
-}
-
-// WithPushWrapper is used to wrap a pusher to hook into
-// the push content as it is sent to a remote.
-func WithPushWrapper(w func(remotes.Pusher) remotes.Pusher) RemoteOpts {
-	return func(client *Client, c *RemoteContext) error {
-		c.PushWrapper = w
 		return nil
 	}
 }
@@ -278,13 +302,30 @@ func (c *Client) Pull(ctx context.Context, ref string, opts ...RemoteOpts) (Imag
 		return nil, err
 	}
 
-	handlers := append(pullCtx.BaseHandlers,
-		remotes.FetchHandler(store, fetcher),
-		images.ChildrenHandler(store),
+	var (
+		schema1Converter *schema1.Converter
+		handler          images.Handler
 	)
-	if err := images.Dispatch(ctx, images.Handlers(handlers...), desc); err != nil {
+	if desc.MediaType == images.MediaTypeDockerSchema1Manifest && pullCtx.ConvertSchema1 {
+		schema1Converter = schema1.NewConverter(store, fetcher)
+		handler = images.Handlers(append(pullCtx.BaseHandlers, schema1Converter)...)
+	} else {
+		handler = images.Handlers(append(pullCtx.BaseHandlers,
+			remotes.FetchHandler(store, fetcher),
+			images.ChildrenHandler(store))...,
+		)
+	}
+
+	if err := images.Dispatch(ctx, handler, desc); err != nil {
 		return nil, err
 	}
+	if schema1Converter != nil {
+		desc, err = schema1Converter.Convert(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	is := c.ImageService()
 	if err := is.Put(ctx, name, desc); err != nil {
 		return nil, err
@@ -316,10 +357,6 @@ func (c *Client) Push(ctx context.Context, ref string, desc ocispec.Descriptor, 
 	pusher, err := pushCtx.Resolver.Pusher(ctx, ref)
 	if err != nil {
 		return err
-	}
-
-	if pushCtx.PushWrapper != nil {
-		pusher = pushCtx.PushWrapper(pusher)
 	}
 
 	var m sync.Mutex
