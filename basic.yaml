@@ -1,0 +1,17 @@
+name: BasicBench
+image: alpine:latest
+rootfs:    /home/estesp/containers/alpine
+detached: true
+drivers:
+  - 
+   type: Docker
+   threads: 5
+   iterations: 15
+  - 
+   type: Runc
+   threads: 5
+   iterations: 50
+commands:
+  - run
+  - stop
+  - remove

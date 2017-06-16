@@ -9,6 +9,8 @@ import (
 	"github.com/estesp/bucketbench/utils"
 )
 
+const defaultRuncBinary = "runc"
+
 // RuncDriver is an implementation of the driver interface for Runc.
 // IMPORTANT: This implementation does not protect instance metadata for thread safely.
 // At this time there is no understood use case for multi-threaded use of this implementation.
@@ -28,6 +30,9 @@ type RuncContainer struct {
 
 // NewRuncDriver creates an instance of the runc driver, providing a path to runc
 func NewRuncDriver(binaryPath string) (Driver, error) {
+	if binaryPath == "" {
+		binaryPath = defaultRuncBinary
+	}
 	resolvedBinPath, err := utils.ResolveBinary(binaryPath)
 	if err != nil {
 		return &RuncDriver{}, err

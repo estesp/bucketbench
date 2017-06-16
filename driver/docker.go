@@ -9,6 +9,8 @@ import (
 	"github.com/estesp/bucketbench/utils"
 )
 
+const defaultDockerBinary = "docker"
+
 // DockerDriver is an implementation of the driver interface for the Docker engine.
 // IMPORTANT: This implementation does not protect instance metadata for thread safely.
 // At this time there is no understood use case for multi-threaded use of this implementation.
@@ -27,6 +29,9 @@ type DockerContainer struct {
 
 // NewDockerDriver creates an instance of the docker driver, providing a path to the docker client binary
 func NewDockerDriver(binaryPath string) (Driver, error) {
+	if binaryPath == "" {
+		binaryPath = defaultDockerBinary
+	}
 	resolvedBinPath, err := utils.ResolveBinary(binaryPath)
 	if err != nil {
 		return &DockerDriver{}, err

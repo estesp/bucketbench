@@ -16,44 +16,24 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/estesp/bucketbench/benches"
 	"github.com/estesp/bucketbench/driver"
+	"github.com/go-yaml/yaml"
 	"github.com/spf13/cobra"
 )
 
 const (
-	defaultLimitThreads      = 10
-	defaultLimitIter         = 1000
-	defaultDockerThreads     = 0
-	defaultRuncThreads       = 0
-	defaultContainerdThreads = 0
-	defaultDockerBinary      = "docker"
-	defaultRuncBinary        = "runc"
-	defaultCtrBinary         = "ctr"
-	defaultContainerdPath    = "/run/containerd/containerd.sock"
-	defaultDockerImage       = "busybox"
-	defaultRuncBundle        = "."
-
-	dockerIter     = 15
-	runcIter       = 50
-	containerdIter = 50
+	defaultLimitThreads = 10
+	defaultLimitIter    = 1000
 )
 
 var (
-	dockerThreads     int
-	runcThreads       int
-	containerdThreads int
-	dockerBinary      string
-	runcBinary        string
-	ctrBinary         string
-	containerdPath    string
-	dockerImage       string
-	runcBundle        string
-	trace             bool
-	legacyCtr         bool
-	skipLimit         bool
+	yamlFile  string
+	trace     bool
+	skipLimit bool
 )
 
 // simple structure to handle collecting output data which will be displayed
@@ -67,11 +47,25 @@ type benchResult struct {
 
 var runCmd = &cobra.Command{
 	Use:   "run",
-	Short: "Run the benchmarks against the selected container engine components",
-	Long: `Providing the number of threads selected for each possible engine, this
-command will run those number of threads with the pre-defined lifecycle commands
-and then report the results to the terminal.`,
+	Short: "Run the benchmark against the selected container engine components",
+	Long: `The YAML file provided via the --benchmark flag will determine which
+lifecycle container commands to run against which container runtimes, specifying
+iterations and number of concurrent threads. Results will be displayed afterwards.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+
+		if yamlFile == "" {
+			return fmt.Errorf("No YAML file provided with --benchmark/-b; nothing to do")
+		}
+		benchmark, err := readYaml(yamlFile)
+		if err != nil {
+			return fmt.Errorf("Error reading benchmark file %q: %v", yamlFile, err)
+		}
+		// verify that an image name exists in the benchmark as
+		// we'll end up erroring out further down if no image is
+		// specified
+		if benchmark.Image == "" {
+			return fmt.Errorf("Please provide an 'image:' entry in your benchmark YAML")
+		}
 
 		var (
 			maxThreads = defaultLimitThreads
@@ -91,55 +85,14 @@ and then report the results to the terminal.`,
 			maxThreads = 0 // no limit results in output
 		}
 
-		if dockerThreads > 0 {
-			// run basic benchmark against Docker
-			dockerRates, err := runDockerBasicBench()
+		for _, driverEntry := range benchmark.Drivers {
+			result, err := runBenchmark(driverEntry, benchmark)
 			if err != nil {
-				log.Errorf("Error during docker basic benchmark execution: %v", err)
 				return err
 			}
-			dockerResult := benchResult{
-				name:        "DockerBasic",
-				threads:     dockerThreads,
-				iterations:  dockerIter,
-				threadRates: dockerRates,
-			}
-			results = append(results, dockerResult)
-			maxThreads = intMax(maxThreads, dockerThreads)
+			results = append(results, result)
+			maxThreads = intMax(maxThreads, driverEntry.Threads)
 		}
-		if runcThreads > 0 {
-			// run basic benchmark against runc
-			runcRates, err := runRuncBasicBench()
-			if err != nil {
-				log.Errorf("Error during runc basic benchmark execution: %v", err)
-				return err
-			}
-			runcResult := benchResult{
-				name:        "RuncBasic",
-				threads:     runcThreads,
-				iterations:  runcIter,
-				threadRates: runcRates,
-			}
-			results = append(results, runcResult)
-			maxThreads = intMax(maxThreads, runcThreads)
-		}
-		if containerdThreads > 0 {
-			// run basic benchmark against containerd
-			containerdRates, err := runContainerdBasicBench()
-			if err != nil {
-				log.Errorf("Error during containerd basic benchmark execution: %v", err)
-				return err
-			}
-			containerdResult := benchResult{
-				name:        "ContainerdBasic",
-				threads:     containerdThreads,
-				iterations:  containerdIter,
-				threadRates: containerdRates,
-			}
-			results = append(results, containerdResult)
-			maxThreads = intMax(maxThreads, containerdThreads)
-		}
-
 		// output benchmark results
 		outputRunDetails(maxThreads, results)
 
@@ -153,8 +106,8 @@ func runLimitTest() []float64 {
 	// get thread limit stats
 	for i := 1; i <= defaultLimitThreads; i++ {
 		limit, _ := benches.New(benches.Limit)
-		limit.Init(driver.Null, "", "", trace)
-		limit.Run(i, defaultLimitIter)
+		limit.Init("", driver.Null, "", "", trace)
+		limit.Run(i, defaultLimitIter, nil)
 		duration := limit.Elapsed()
 		rate := float64(i*defaultLimitIter) / duration.Seconds()
 		rates = append(rates, rate)
@@ -163,88 +116,48 @@ func runLimitTest() []float64 {
 	return rates
 }
 
-func runDockerBasicBench() ([]float64, error) {
-	var rates []float64
-	for i := 1; i <= dockerThreads; i++ {
-		basic, _ := benches.New(benches.Basic)
-		err := basic.Init(driver.Docker, dockerBinary, dockerImage, trace)
-		if err != nil {
-			return []float64{}, err
-		}
+func runBenchmark(driverConfig benches.DriverConfig, benchmark benches.Benchmark) (benchResult, error) {
+	var (
+		rates     []float64
+		benchInfo string
+	)
+	driverType := driver.StringToType(driverConfig.Type)
 
-		if err = basic.Validate(); err != nil {
-			return []float64{}, fmt.Errorf("Error during basic bench validate: %v", err)
-		}
-
-		err = basic.Run(i, dockerIter)
-		if err != nil {
-			return []float64{}, fmt.Errorf("Error during basic bench run: %v", err)
-		}
-		duration := basic.Elapsed()
-		rate := float64(i*dockerIter) / duration.Seconds()
-		rates = append(rates, rate)
-		log.Infof("Docker Basic: threads %d, iterations %d, rate: %6.2f", i, dockerIter, rate)
-	}
-	return rates, nil
-}
-
-func runRuncBasicBench() ([]float64, error) {
-	var rates []float64
-	for i := 1; i <= runcThreads; i++ {
-		basic, _ := benches.New(benches.Basic)
-		err := basic.Init(driver.Runc, runcBinary, runcBundle, trace)
-		if err != nil {
-			return []float64{}, err
-		}
-
-		if err = basic.Validate(); err != nil {
-			return []float64{}, err
-		}
-
-		err = basic.Run(i, runcIter)
-		if err != nil {
-			return []float64{}, fmt.Errorf("Error during basic bench run: %v", err)
-		}
-		duration := basic.Elapsed()
-		rate := float64(i*runcIter) / duration.Seconds()
-		rates = append(rates, rate)
-		log.Infof("Runc Basic: threads %d, iterations %d, rate: %6.2f", i, runcIter, rate)
-	}
-	return rates, nil
-}
-
-func runContainerdBasicBench() ([]float64, error) {
-	var rates []float64
-	for i := 1; i <= containerdThreads; i++ {
-		basic, _ := benches.New(benches.Basic)
-		if legacyCtr {
-			// use legacy containerd via the "ctr" client binary
-			err := basic.Init(driver.Ctr, ctrBinary, runcBundle, trace)
-			if err != nil {
-				return []float64{}, err
+	for i := 1; i <= driverConfig.Threads; i++ {
+		bench, _ := benches.New(benches.Custom)
+		imageInfo := benchmark.Image
+		if driverType == driver.Runc || driverType == driver.Ctr {
+			// legacy ctr mode and runc drivers need an exploded rootfs
+			// first, verify thta a rootfs was provided in the benchmark YAML
+			if benchmark.RootFs == "" {
+				return benchResult{}, fmt.Errorf("No rootfs defined in the benchmark YAML; driver %s requires a root FS path", driverConfig.Type)
 			}
-		} else {
-			// use the containerd 1.0 release via the gRPC client library
-			err := basic.Init(driver.Containerd, containerdPath, dockerImage, trace)
-			if err != nil {
-				return []float64{}, err
-			}
+			imageInfo = benchmark.RootFs
 		}
-
-		if err := basic.Validate(); err != nil {
-			return []float64{}, err
-		}
-
-		err := basic.Run(i, containerdIter)
+		err := bench.Init(benchmark.Name, driverType, driverConfig.Binary, imageInfo, trace)
 		if err != nil {
-			return []float64{}, fmt.Errorf("Error during basic bench run: %v", err)
+			return benchResult{}, err
 		}
-		duration := basic.Elapsed()
-		rate := float64(i*runcIter) / duration.Seconds()
+		benchInfo = bench.Info()
+		if err = bench.Validate(); err != nil {
+			return benchResult{}, fmt.Errorf("Error during bench validate: %v", err)
+		}
+		err = bench.Run(i, driverConfig.Iterations, benchmark.Commands)
+		if err != nil {
+			return benchResult{}, fmt.Errorf("Error during bench run: %v", err)
+		}
+		duration := bench.Elapsed()
+		rate := float64(i*driverConfig.Iterations) / duration.Seconds()
 		rates = append(rates, rate)
-		log.Infof("Containerd Basic: threads %d, iterations %d, rate: %6.2f", i, containerdIter, rate)
+		log.Infof("%s: threads %d, iterations %d, rate: %6.2f", benchInfo, i, driverConfig.Iterations, rate)
 	}
-	return rates, nil
+	result := benchResult{
+		name:        benchInfo,
+		threads:     driverConfig.Threads,
+		iterations:  driverConfig.Iterations,
+		threadRates: rates,
+	}
+	return result, nil
 }
 
 func outputRunDetails(maxThreads int, results []benchResult) {
@@ -268,18 +181,22 @@ func intMax(x, y int) int {
 	return y
 }
 
+func readYaml(filename string) (benches.Benchmark, error) {
+	var benchmarkYaml benches.Benchmark
+	yamlFile, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return benchmarkYaml, fmt.Errorf("Can't read YAML file %q: %v", filename, err)
+	}
+	err = yaml.Unmarshal(yamlFile, &benchmarkYaml)
+	if err != nil {
+		return benchmarkYaml, fmt.Errorf("Can't unmarshal YAML file %q: %v", filename, err)
+	}
+	return benchmarkYaml, nil
+}
+
 func init() {
 	RootCmd.AddCommand(runCmd)
-	runCmd.PersistentFlags().IntVarP(&dockerThreads, "docker", "d", defaultDockerThreads, "Number of threads to execute against Docker")
-	runCmd.PersistentFlags().IntVarP(&runcThreads, "runc", "r", defaultRuncThreads, "Number of threads to execute against runc")
-	runCmd.PersistentFlags().IntVarP(&containerdThreads, "containerd", "c", defaultContainerdThreads, "Number of threads to execute against containerd")
-	runCmd.PersistentFlags().StringVarP(&dockerBinary, "docker-binary", "", defaultDockerBinary, "Name/path of Docker binary")
-	runCmd.PersistentFlags().StringVarP(&runcBinary, "runc-binary", "", defaultRuncBinary, "Name/path of runc binary")
-	runCmd.PersistentFlags().StringVarP(&ctrBinary, "ctr-binary", "", defaultCtrBinary, "Name/path of legacy containerd client (ctr) binary")
-	runCmd.PersistentFlags().StringVarP(&containerdPath, "ctrd-path", "", defaultContainerdPath, "Socket path of containerd gRPC interface")
-	runCmd.PersistentFlags().StringVarP(&dockerImage, "image", "i", defaultDockerImage, "Name of test Docker image")
-	runCmd.PersistentFlags().StringVarP(&runcBundle, "bundle", "b", defaultRuncBundle, "Path of test runc image bundle")
-	runCmd.PersistentFlags().BoolVarP(&legacyCtr, "legacy-ctr", "l", false, "Enable legacy containerd use via ctr client")
+	runCmd.PersistentFlags().StringVarP(&yamlFile, "benchmark", "b", "", "YAML file with benchmark definition")
 	runCmd.PersistentFlags().BoolVarP(&trace, "trace", "t", false, "Enable per-container tracing during benchmark runs")
 	runCmd.PersistentFlags().BoolVarP(&skipLimit, "skip-limit", "s", false, "Skip 'limit' benchmark run")
 }

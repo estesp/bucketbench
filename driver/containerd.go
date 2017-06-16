@@ -10,6 +10,8 @@ import (
 	"github.com/containerd/containerd/namespaces"
 )
 
+const defaultContainerdPath = "/run/containerd/containerd.sock"
+
 // ContainerdDriver is an implementation of the driver interface for using Containerd.
 // This uses the provided client library which abstracts using the gRPC APIs directly.
 // IMPORTANT: This implementation does not protect instance metadata for thread safely.
@@ -31,6 +33,9 @@ type ContainerdContainer struct {
 
 // NewContainerdDriver creates an instance of the containerd driver, providing a path to the ctr client
 func NewContainerdDriver(path string) (Driver, error) {
+	if path == "" {
+		path = defaultContainerdPath
+	}
 	client, err := containerd.New(path)
 	if err != nil {
 		return &ContainerdDriver{}, err
