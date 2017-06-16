@@ -53,3 +53,11 @@ func ExecCmd(cmd, args string) (string, error) {
 	out, err := execCmd.CombinedOutput()
 	return string(out), err
 }
+
+// ExecShellCmd executes a 'bash -c' process, with the passed-in command
+// handed to the -c flag of bash
+func ExecShellCmd(cmd string) (string, error) {
+	execCmd := exec.Command("bash", "-c", cmd)
+	out, err := execCmd.CombinedOutput()
+	return string(out), err
+}

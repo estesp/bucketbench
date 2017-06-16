@@ -104,11 +104,25 @@ func (d *DockerDriver) Create(name, image string, detached bool, trace bool) (Co
 // Clean will clean the environment; removing any exited containers
 func (d *DockerDriver) Clean() error {
 	// clean up any containers from a prior run
-	log.Info("Clearing docker daemon exited containers")
-	cmd := "docker rm -f `docker ps -aq`"
-	out, err := utils.ExecCmd("bash", "-c "+cmd)
+	log.Info("Docker: Stopping any running containers created during bucketbench runs")
+	cmd := "docker stop `docker ps -qf name=bb-ctr-`"
+	out, err := utils.ExecShellCmd(cmd)
 	if err != nil {
-		log.Warnf("Couldn't clean up docker daemon containers: %v (output: %s)", err, out)
+		// first make sure the error isn't simply that there were no
+		// containers to stop:
+		if !strings.Contains(out, "requires at least 1 argument") {
+			log.Warnf("Docker: Failed to stop running bb-ctr-* containers: %v (output: %s)", err, out)
+		}
+	}
+	log.Info("Docker: Removing exited containers from bucketbench runs")
+	cmd = "docker rm -f `docker ps -aqf name=bb-ctr-`"
+	out, err = utils.ExecShellCmd(cmd)
+	if err != nil {
+		// first make sure the error isn't simply that there were no
+		// exited containers to remove:
+		if !strings.Contains(out, "requires at least 1 argument") {
+			log.Warnf("Docker: Failed to remove exited bb-ctr-* containers: %v (output: %s)", err, out)
+		}
 	}
 	return nil
 }
