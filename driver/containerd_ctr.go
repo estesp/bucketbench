@@ -9,6 +9,8 @@ import (
 	"github.com/estesp/bucketbench/utils"
 )
 
+const defaultCtrBinary = "ctr"
+
 // CtrDriver is an implementation of the driver interface for using Containerd
 // in "legacy" mode via the `ctr` client binary (meant for testing purposes only).
 // IMPORTANT: This implementation does not protect instance metadata for thread safely.
@@ -28,6 +30,9 @@ type CtrContainer struct {
 
 // NewCtrDriver creates an instance of the containerd driver, providing a path to the ctr client
 func NewCtrDriver(binaryPath string) (Driver, error) {
+	if binaryPath == "" {
+		binaryPath = defaultCtrBinary
+	}
 	resolvedBinPath, err := utils.ResolveBinary(binaryPath)
 	if err != nil {
 		return &CtrDriver{}, err

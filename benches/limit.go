@@ -21,7 +21,7 @@ type LimitBench struct {
 }
 
 // Init initializes the benchmark
-func (lb *LimitBench) Init(driverType driver.Type, binaryPath, imageInfo string, trace bool) error {
+func (lb *LimitBench) Init(name string, driverType driver.Type, binaryPath, imageInfo string, trace bool) error {
 	return nil
 }
 
@@ -32,7 +32,7 @@ func (lb *LimitBench) Validate() error {
 
 // Run executes the benchmark iterations against a specific engine driver type
 // for a specified number of iterations
-func (lb *LimitBench) Run(threads, iterations int) error {
+func (lb *LimitBench) Run(threads, iterations int, commands []string) error {
 	log.Infof("Start LimitBench run: threads (%d); iterations (%d)", threads, iterations)
 	statChan := make([]chan RunStatistics, threads)
 	for i := range statChan {
@@ -63,10 +63,7 @@ func (lb *LimitBench) runThread(iterations int, stats chan RunStatistics) {
 		_, elapsed, _ := utils.ExecTimedCmd("ls", "/tmp")
 		//_, elapsed, _ := utils.ExecTimedCmd("date", "")
 		stats <- RunStatistics{
-			RunDuration:     elapsed,
-			RmDuration:      -1,
-			PauseDuration:   -1,
-			UnpauseDuration: -1,
+			Durations: map[string]int{"run": elapsed},
 		}
 	}
 	close(stats)
@@ -94,4 +91,9 @@ func (lb *LimitBench) Elapsed() time.Duration {
 // Type returns the type of benchmark
 func (lb *LimitBench) Type() Type {
 	return Limit
+}
+
+// Info returns a string with the driver type and custom benchmark name
+func (lb *LimitBench) Info() string {
+	return "Limit benchmark: No driver"
 }

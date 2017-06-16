@@ -88,3 +88,39 @@ func New(dtype Type, path string) (Driver, error) {
 		return nil, fmt.Errorf("No such driver type: %v", dtype)
 	}
 }
+
+// TypeToString converts a driver Type into its string representation
+func TypeToString(dtype Type) string {
+	var driverType string
+	switch dtype {
+	case Docker:
+		driverType = "Docker"
+	case Containerd:
+		driverType = "Containerd"
+	case Ctr:
+		driverType = "Ctr"
+	case Runc:
+		driverType = "Runc"
+	default:
+		driverType = "(unknown)"
+	}
+	return driverType
+}
+
+// StringToType converts a driver stringified typename into its Type
+func StringToType(dtype string) Type {
+	var driverType Type
+	switch dtype {
+	case "Docker":
+		driverType = Docker
+	case "Containerd":
+		driverType = Containerd
+	case "Ctr":
+		driverType = Ctr
+	case "Runc":
+		driverType = Runc
+	default:
+		driverType = Null
+	}
+	return driverType
+}

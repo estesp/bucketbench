@@ -13,14 +13,32 @@ type State int
 // Type represents the type of benchmark
 type Type int
 
-// RunStatistics contains perf. data from a run
+// RunStatistics contains performance data from the benchmark run
+// Each "step" from the benchmark is named and a map of the name
+// to a millisecond duration for that step is provided
 type RunStatistics struct {
-	RunDuration     int
-	RmDuration      int
-	PauseDuration   int
-	UnpauseDuration int
-	RmFailures      bool
-	Errors          int
+	Durations map[string]int
+	Errors    map[string]int
+}
+
+// Benchmark is the object form of a YAML-defined custom benchmark
+// used to define the specific operations to perform
+type Benchmark struct {
+	Name     string
+	Image    string
+	RootFs   string
+	Detached bool
+	Drivers  []DriverConfig
+	Commands []string
+}
+
+// DriverConfig contains the YAML-defined parameters for running a
+// benchmark against a specific driver type
+type DriverConfig struct {
+	Type       string
+	Binary     string //optional path to specific client binary
+	Threads    int
+	Iterations int
 }
 
 // State constants
@@ -35,20 +53,19 @@ const (
 
 // Type constants
 const (
-	// Limit is a benchmark type for testing per-thread limitations
+	// Limit is a benchmark type for testing per-thread execution limits on the
+	// hardware/environment
 	Limit Type = iota
-	// Basic is a simple benchmark for run, kill, remove containers
-	Basic
-	// Full performs a full sequence of create, run, pause, unpause, kill, remove
-	Full
+	// Custom is a YAML-defined series of container actions run as a benchmark
+	Custom
 )
 
-// Bench is an interface for a benchmark execution
+// Bench is an interface to manage benchmark execution against a specific driver
 type Bench interface {
 
 	// Init initializes the benchmark (for example, verifies a daemon is running for daemon-centric
 	// engines, pre-pulls images, etc.)
-	Init(driverType driver.Type, binaryPath, imageInfo string, trace bool) error
+	Init(name string, driverType driver.Type, binaryPath, imageInfo string, trace bool) error
 
 	//Validates the any condition that need to be checked before actual banchmark run.
 	//Helpful in testing operations required in benchmark for single run.
@@ -57,12 +74,12 @@ type Bench interface {
 	// Run executes the specified # of iterations against a specified # of
 	// threads per benchmark against a specific engine driver type and collects
 	// the statistics of each iteration and thread
-	Run(threads, iterations int) error
+	Run(threads, iterations int, commands []string) error
 
 	// Stats returns the statistics of the benchmark run
 	Stats() []RunStatistics
 
-	// Elapsed returns the time.Duration that the benchmark took to executes
+	// Elapsed returns the time.Duration that the benchmark took to execute
 	Elapsed() time.Duration
 
 	// State returns Created, Running, or Completed
@@ -70,6 +87,9 @@ type Bench interface {
 
 	// Type returns the type of benchmark
 	Type() Type
+
+	// Info returns a string with the driver type and custom benchmark name
+	Info() string
 }
 
 // New creates an instance of the selected benchmark type
@@ -79,12 +99,10 @@ func New(btype Type) (Bench, error) {
 		return &LimitBench{
 			state: Created,
 		}, nil
-	case Basic:
-		return &BasicBench{
+	case Custom:
+		return &CustomBench{
 			state: Created,
 		}, nil
-	case Full:
-		return nil, fmt.Errorf("full benchmark not implemented")
 	default:
 		return nil, fmt.Errorf("No such benchmark type: %v", btype)
 	}

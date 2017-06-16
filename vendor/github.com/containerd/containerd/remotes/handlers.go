@@ -25,7 +25,7 @@ func MakeRefKey(ctx context.Context, desc ocispec.Descriptor) string {
 		return "manifest-" + desc.Digest.String()
 	case images.MediaTypeDockerSchema2Layer, images.MediaTypeDockerSchema2LayerGzip:
 		return "layer-" + desc.Digest.String()
-	case "application/vnd.docker.container.image.v1+json":
+	case images.MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
 		return "config-" + desc.Digest.String()
 	default:
 		log.G(ctx).Warnf("reference for unknown type: %s", desc.MediaType)
@@ -47,6 +47,8 @@ func FetchHandler(ingester content.Ingester, fetcher Fetcher) images.HandlerFunc
 		switch desc.MediaType {
 		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
 			return nil, fmt.Errorf("%v not yet supported", desc.MediaType)
+		case images.MediaTypeDockerSchema1Manifest:
+			return nil, fmt.Errorf("%v not supported", desc.MediaType)
 		default:
 			err := fetch(ctx, ingester, fetcher, desc)
 			return nil, err
@@ -99,6 +101,8 @@ func fetch(ctx context.Context, ingester content.Ingester, fetcher Fetcher, desc
 	return content.Copy(cw, rc, desc.Size, desc.Digest)
 }
 
+// PushHandler returns a handler that will push all content from the provider
+// using a writer from the pusher.
 func PushHandler(provider content.Provider, pusher Pusher) images.HandlerFunc {
 	return func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 		ctx = log.WithLogger(ctx, log.G(ctx).WithFields(logrus.Fields{
@@ -107,13 +111,29 @@ func PushHandler(provider content.Provider, pusher Pusher) images.HandlerFunc {
 			"size":      desc.Size,
 		}))
 
-		log.G(ctx).Debug("push")
-		r, err := provider.Reader(ctx, desc.Digest)
-		if err != nil {
-			return nil, err
-		}
-		defer r.Close()
-
-		return nil, pusher.Push(ctx, desc, r)
+		err := push(ctx, provider, pusher, desc)
+		return nil, err
 	}
+}
+
+func push(ctx context.Context, provider content.Provider, pusher Pusher, desc ocispec.Descriptor) error {
+	log.G(ctx).Debug("push")
+
+	cw, err := pusher.Push(ctx, desc)
+	if err != nil {
+		if !content.IsExists(err) {
+			return err
+		}
+
+		return nil
+	}
+	defer cw.Close()
+
+	rc, err := provider.Reader(ctx, desc.Digest)
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+
+	return content.Copy(cw, rc, desc.Size, desc.Digest)
 }
