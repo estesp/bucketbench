@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"syscall"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/containerd/containerd"
@@ -148,6 +149,7 @@ func (r *ContainerdDriver) Clean() error {
 
 // Run will execute a container using the containerd driver.
 func (r *ContainerdDriver) Run(ctr Container) (string, int, error) {
+	start := time.Now()
 	image, err := r.client.GetImage(r.context, ctr.Image())
 	if err != nil {
 		return "", 0, err
@@ -171,11 +173,14 @@ func (r *ContainerdDriver) Run(ctr Container) (string, int, error) {
 		task.Delete(r.context)
 		return "", 0, err
 	}
-	return "", 0, nil
+	elapsed := time.Since(start)
+	msElapsed := int(elapsed.Nanoseconds() / 1000000)
+	return "", msElapsed, nil
 }
 
 // Stop will stop/kill a container
 func (r *ContainerdDriver) Stop(ctr Container) (string, int, error) {
+	start := time.Now()
 	container, err := r.client.LoadContainer(r.context, ctr.Name())
 	if err != nil {
 		return "", 0, err
@@ -192,12 +197,15 @@ func (r *ContainerdDriver) Stop(ctr Container) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	return "", 0, nil
+	elapsed := time.Since(start)
+	msElapsed := int(elapsed.Nanoseconds() / 1000000)
+	return "", msElapsed, nil
 }
 
 // Remove will remove a container; in the containerd case we simply call kill
 // which will remove any container metadata if it was running
 func (r *ContainerdDriver) Remove(ctr Container) (string, int, error) {
+	start := time.Now()
 	container, err := r.client.LoadContainer(r.context, ctr.Name())
 	if err != nil {
 		return "", 0, err
@@ -206,11 +214,14 @@ func (r *ContainerdDriver) Remove(ctr Container) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	return "", 0, nil
+	elapsed := time.Since(start)
+	msElapsed := int(elapsed.Nanoseconds() / 1000000)
+	return "", msElapsed, nil
 }
 
 // Pause will pause a container
 func (r *ContainerdDriver) Pause(ctr Container) (string, int, error) {
+	start := time.Now()
 	container, err := r.client.LoadContainer(r.context, ctr.Name())
 	if err != nil {
 		return "", 0, err
@@ -223,11 +234,14 @@ func (r *ContainerdDriver) Pause(ctr Container) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	return "", 0, nil
+	elapsed := time.Since(start)
+	msElapsed := int(elapsed.Nanoseconds() / 1000000)
+	return "", msElapsed, nil
 }
 
 // Unpause will unpause/resume a container
 func (r *ContainerdDriver) Unpause(ctr Container) (string, int, error) {
+	start := time.Now()
 	container, err := r.client.LoadContainer(r.context, ctr.Name())
 	if err != nil {
 		return "", 0, err
@@ -240,5 +254,7 @@ func (r *ContainerdDriver) Unpause(ctr Container) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	return "", 0, nil
+	elapsed := time.Since(start)
+	msElapsed := int(elapsed.Nanoseconds() / 1000000)
+	return "", msElapsed, nil
 }
