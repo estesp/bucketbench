@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"fmt"
+	"strings"
 	"syscall"
 	"time"
 
@@ -109,15 +110,19 @@ func (r *ContainerdDriver) Info() (string, error) {
 // Create will create a container instance matching the specific needs
 // of a driver
 func (r *ContainerdDriver) Create(name, image string, detached bool, trace bool) (Container, error) {
-	if _, err := r.client.GetImage(r.context, image); err != nil {
+	// we need to convert the bare Docker image name to a fully resolved
+	// reference (since the Docker driver and containerd driver share image
+	// name references)
+	fullImageName := resolveDockerImageName(image)
+	if _, err := r.client.GetImage(r.context, fullImageName); err != nil {
 		// if the image isn't already in our namespaced context, then pull it
 		// using the reference and default resolver (most likely DockerHub)
-		if _, err := r.client.Pull(r.context, image, containerd.WithPullUnpack); err != nil {
+		if _, err := r.client.Pull(r.context, fullImageName, containerd.WithPullUnpack); err != nil {
 			// error pulling the image
 			return nil, err
 		}
 	}
-	return newContainerdContainer(name, image, trace), nil
+	return newContainerdContainer(name, fullImageName, trace), nil
 }
 
 // Clean will clean the environment; removing any remaining containers in the runc metadata
@@ -257,4 +262,38 @@ func (r *ContainerdDriver) Unpause(ctr Container) (string, int, error) {
 	elapsed := time.Since(start)
 	msElapsed := int(elapsed.Nanoseconds() / 1000000)
 	return "", msElapsed, nil
+}
+
+// much of this code is copied from docker/docker/reference.go
+const (
+	// DefaultTag defines the default tag used when performing images related actions and no tag or digest is specified
+	DefaultTag = "latest"
+	// DefaultHostname is the default built-in hostname
+	DefaultHostname = "docker.io"
+	// DefaultRepoPrefix is the prefix used for default repositories in default host
+	DefaultRepoPrefix = "library/"
+)
+
+// resolve a Docker image name to a fully normalized reference with
+// registry hostname and tag; note that most of this function is copied
+// as-is from docker/docker/reference.go; the "stripHostname()" function
+// specifically
+func resolveDockerImageName(name string) string {
+	var (
+		hostname, remoteName string
+	)
+	i := strings.IndexRune(name, '/')
+	if i == -1 || (!strings.ContainsAny(name[:i], ".:") && name[:i] != "localhost") {
+		hostname, remoteName = DefaultHostname, name
+	} else {
+		hostname, remoteName = name[:i], name[i+1:]
+	}
+	if hostname == DefaultHostname && !strings.ContainsRune(remoteName, '/') {
+		remoteName = DefaultRepoPrefix + remoteName
+	}
+	if !strings.ContainsRune(remoteName, ':') {
+		// append default tag
+		remoteName = remoteName + ":" + DefaultTag
+	}
+	return fmt.Sprintf("%s/%s", hostname, remoteName)
 }
