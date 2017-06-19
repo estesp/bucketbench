@@ -13,18 +13,19 @@ import (
 // CustomBench benchmark runs a series of container lifecycle operations as
 // defined in the provided YAML against specified image and driver types
 type CustomBench struct {
-	benchName string
-	driver    driver.Driver
-	imageInfo string
-	trace     bool
-	stats     []RunStatistics
-	elapsed   time.Duration
-	state     State
-	wg        sync.WaitGroup
+	benchName   string
+	driver      driver.Driver
+	imageInfo   string
+	cmdOverride string
+	trace       bool
+	stats       []RunStatistics
+	elapsed     time.Duration
+	state       State
+	wg          sync.WaitGroup
 }
 
 // Init initializes the benchmark
-func (cb *CustomBench) Init(name string, driverType driver.Type, binaryPath, imageInfo string, trace bool) error {
+func (cb *CustomBench) Init(name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error {
 	driver, err := driver.New(driverType, binaryPath)
 	if err != nil {
 		return fmt.Errorf("Error during driver initialization for CustomBench: %v", err)
@@ -43,6 +44,7 @@ func (cb *CustomBench) Init(name string, driverType driver.Type, binaryPath, ima
 	}
 	cb.benchName = name
 	cb.imageInfo = imageInfo
+	cb.cmdOverride = cmdOverride
 	cb.driver = driver
 	cb.trace = trace
 	return nil
@@ -51,26 +53,26 @@ func (cb *CustomBench) Init(name string, driverType driver.Type, binaryPath, ima
 // Validate the unit of benchmark execution (create-run-stop-remove) against
 // the initialized driver.
 func (cb *CustomBench) Validate() error {
-	ctr, err := cb.driver.Create("bb-test", cb.imageInfo, true, cb.trace)
+	ctr, err := cb.driver.Create("bb-test", cb.imageInfo, cb.cmdOverride, true, cb.trace)
 	if err != nil {
-		return fmt.Errorf("Error in Create : %v", err)
+		return fmt.Errorf("Driver validation: error creating test container: %v", err)
 	}
 
 	_, _, err = cb.driver.Run(ctr)
 	if err != nil {
-		return fmt.Errorf("Error in Run : %v", err)
+		return fmt.Errorf("Driver validation: error running test container: %v", err)
 	}
 
 	_, _, err = cb.driver.Stop(ctr)
 	if err != nil {
-		return fmt.Errorf("Error in Stop : %v", err)
+		return fmt.Errorf("Driver validation: error stopping test container: %v", err)
 	}
 	// allow time for quiesce of stopped state in process and container executor metadata
 	time.Sleep(50 * time.Millisecond)
 
 	_, _, err = cb.driver.Remove(ctr)
 	if err != nil {
-		return fmt.Errorf("Error in Remove : %v", err)
+		return fmt.Errorf("Driver validation: error deleting test container: %v", err)
 	}
 	return nil
 }
@@ -110,28 +112,28 @@ func (cb *CustomBench) runThread(threadNum, iterations int, commands []string, s
 		// commands are specified in the passed in array; we will need
 		// a container for each set of commands:
 		name := fmt.Sprintf("bb-ctr-%d-%d", threadNum, i)
-		ctr, err := cb.driver.Create(name, cb.imageInfo, true, cb.trace)
+		ctr, err := cb.driver.Create(name, cb.imageInfo, cb.cmdOverride, true, cb.trace)
 		if err != nil {
 			log.Errorf("Error on creating container %q from image %q: %v", name, cb.imageInfo, err)
 		}
 
 		for _, cmd := range commands {
 			switch strings.ToLower(cmd) {
-			case "run":
+			case "run", "start":
 				out, runElapsed, err := cb.driver.Run(ctr)
 				if err != nil {
 					errors[cmd]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations[cmd] = runElapsed
-			case "stop":
+			case "stop", "kill":
 				out, stopElapsed, err := cb.driver.Stop(ctr)
 				if err != nil {
 					errors[cmd]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations[cmd] = stopElapsed
-			case "remove":
+			case "remove", "erase", "delete":
 				out, rmElapsed, err := cb.driver.Remove(ctr)
 				if err != nil {
 					errors[cmd]++
@@ -145,7 +147,7 @@ func (cb *CustomBench) runThread(threadNum, iterations int, commands []string, s
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations[cmd] = pauseElapsed
-			case "unpause":
+			case "unpause", "resume":
 				out, unpauseElapsed, err := cb.driver.Unpause(ctr)
 				if err != nil {
 					errors[cmd]++

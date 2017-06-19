@@ -26,6 +26,7 @@ type RunStatistics struct {
 type Benchmark struct {
 	Name     string
 	Image    string
+	Command  string //optionally override the default image CMD/ENTRYPOINT
 	RootFs   string
 	Detached bool
 	Drivers  []DriverConfig
@@ -65,7 +66,7 @@ type Bench interface {
 
 	// Init initializes the benchmark (for example, verifies a daemon is running for daemon-centric
 	// engines, pre-pulls images, etc.)
-	Init(name string, driverType driver.Type, binaryPath, imageInfo string, trace bool) error
+	Init(name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error
 
 	//Validates the any condition that need to be checked before actual banchmark run.
 	//Helpful in testing operations required in benchmark for single run.

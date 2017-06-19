@@ -68,6 +68,12 @@ func (c *CtrContainer) Image() string {
 	return c.bundlePath
 }
 
+// Command is not implemented for the legacy `ctr` driver type
+// as the command is embedded in the config.json of the rootfs
+func (c *CtrContainer) Command() string {
+	return ""
+}
+
 // Process returns the process name in cases where this container instance is
 // wrapping a potentially running container
 func (c *CtrContainer) Process() string {
@@ -107,7 +113,7 @@ func (r *CtrDriver) Info() (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (r *CtrDriver) Create(name, image string, detached bool, trace bool) (Container, error) {
+func (r *CtrDriver) Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
 	return newCtrContainer(name, image, trace), nil
 }
 

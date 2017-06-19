@@ -106,7 +106,7 @@ func runLimitTest() []float64 {
 	// get thread limit stats
 	for i := 1; i <= defaultLimitThreads; i++ {
 		limit, _ := benches.New(benches.Limit)
-		limit.Init("", driver.Null, "", "", trace)
+		limit.Init("", driver.Null, "", "", "", trace)
 		limit.Run(i, defaultLimitIter, nil)
 		duration := limit.Elapsed()
 		rate := float64(i*defaultLimitIter) / duration.Seconds()
@@ -134,7 +134,7 @@ func runBenchmark(driverConfig benches.DriverConfig, benchmark benches.Benchmark
 			}
 			imageInfo = benchmark.RootFs
 		}
-		err := bench.Init(benchmark.Name, driverType, driverConfig.Binary, imageInfo, trace)
+		err := bench.Init(benchmark.Name, driverType, driverConfig.Binary, imageInfo, benchmark.Command, trace)
 		if err != nil {
 			return benchResult{}, err
 		}

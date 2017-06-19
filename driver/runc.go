@@ -74,6 +74,12 @@ func (c *RuncContainer) Image() string {
 	return c.bundlePath
 }
 
+// Command is not implemented for the runc driver type
+// as the command is embedded in the config.json of the rootfs
+func (c *RuncContainer) Command() string {
+	return ""
+}
+
 // Pid returns the process ID in cases where this container instance is
 // wrapping a potentially running container
 func (c *RuncContainer) Pid() string {
@@ -102,7 +108,7 @@ func (r *RuncDriver) Info() (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (r *RuncDriver) Create(name, image string, detached bool, trace bool) (Container, error) {
+func (r *RuncDriver) Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
 	return newRuncContainer(name, image, detached, trace), nil
 }
 
