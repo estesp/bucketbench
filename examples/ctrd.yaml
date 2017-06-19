@@ -1,0 +1,12 @@
+name: CtrdRunOnly
+image: busybox
+command: date
+detached: true
+drivers:
+  - 
+   type: Containerd
+   threads: 3
+   iterations: 10
+commands:
+  - run
+  - delete

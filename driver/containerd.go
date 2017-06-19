@@ -10,6 +10,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/namespaces"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 const defaultContainerdPath = "/run/containerd/containerd.sock"
@@ -26,11 +27,12 @@ type ContainerdDriver struct {
 
 // ContainerdContainer is an implementation of the container metadata needed for containerd
 type ContainerdContainer struct {
-	name      string
-	imageName string
-	state     string
-	process   string
-	trace     bool
+	name        string
+	imageName   string
+	cmdOverride string
+	state       string
+	process     string
+	trace       bool
 }
 
 // NewContainerdDriver creates an instance of the containerd driver, providing a path to the ctr client
@@ -53,11 +55,12 @@ func NewContainerdDriver(path string) (Driver, error) {
 
 // newContainerdContainer creates the metadata object of a containerd-specific container with
 // bundle, name, and any required additional information
-func newContainerdContainer(name, image string, trace bool) Container {
+func newContainerdContainer(name, image, cmd string, trace bool) Container {
 	return &ContainerdContainer{
-		name:      name,
-		imageName: image,
-		trace:     trace,
+		name:        name,
+		imageName:   image,
+		cmdOverride: cmd,
+		trace:       trace,
 	}
 }
 
@@ -74,6 +77,12 @@ func (c *ContainerdContainer) Trace() bool {
 // Image returns the bundle path that runc will use
 func (c *ContainerdContainer) Image() string {
 	return c.imageName
+}
+
+// Command returns the override command that will be executed instead of
+// the default image-specified command
+func (c *ContainerdContainer) Command() string {
+	return c.cmdOverride
 }
 
 // Process returns the process name in cases where this container instance is
@@ -109,7 +118,7 @@ func (r *ContainerdDriver) Info() (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (r *ContainerdDriver) Create(name, image string, detached bool, trace bool) (Container, error) {
+func (r *ContainerdDriver) Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
 	// we need to convert the bare Docker image name to a fully resolved
 	// reference (since the Docker driver and containerd driver share image
 	// name references)
@@ -122,7 +131,7 @@ func (r *ContainerdDriver) Create(name, image string, detached bool, trace bool)
 			return nil, err
 		}
 	}
-	return newContainerdContainer(name, fullImageName, trace), nil
+	return newContainerdContainer(name, fullImageName, cmdOverride, trace), nil
 }
 
 // Clean will clean the environment; removing any remaining containers in the runc metadata
@@ -138,6 +147,9 @@ func (r *ContainerdDriver) Clean() error {
 		log.Infof("containerd cleanup: Pass #%d", tries+1)
 		// kill/stop and remove containers
 		for _, ctr := range list {
+			if err := stopTasks(r.context, ctr); err != nil {
+				log.Errorf("Error stopping container: %v: %v", ctr, err)
+			}
 			if err := ctr.Delete(r.context); err != nil {
 				log.Errorf("Error deleting container %v: %v", ctr, err)
 			}
@@ -159,7 +171,14 @@ func (r *ContainerdDriver) Run(ctr Container) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	spec, err := containerd.GenerateSpec(containerd.WithImageConfig(r.context, image))
+	var spec *specs.Spec
+	if ctr.Command() != "" {
+		// the command needs to be overridden in the generated spec
+		spec, err = containerd.GenerateSpec(containerd.WithImageConfig(r.context, image),
+			containerd.WithProcessArgs(strings.Split(ctr.Command(), " ")...))
+	} else {
+		spec, err = containerd.GenerateSpec(containerd.WithImageConfig(r.context, image))
+	}
 	if err != nil {
 		return "", 0, err
 	}
@@ -183,23 +202,15 @@ func (r *ContainerdDriver) Run(ctr Container) (string, int, error) {
 	return "", msElapsed, nil
 }
 
-// Stop will stop/kill a container
+// Stop will stop/kill a container (specifically, the tasks [processes]
+// running in the container)
 func (r *ContainerdDriver) Stop(ctr Container) (string, int, error) {
 	start := time.Now()
 	container, err := r.client.LoadContainer(r.context, ctr.Name())
 	if err != nil {
 		return "", 0, err
 	}
-	task, err := container.Task(r.context, nil)
-	if err != nil {
-		return "", 0, err
-	}
-	err = task.Kill(r.context, syscall.SIGKILL)
-	if err != nil {
-		return "", 0, err
-	}
-	_, err = task.Delete(r.context)
-	if err != nil {
+	if err = stopTasks(r.context, container); err != nil {
 		return "", 0, err
 	}
 	elapsed := time.Since(start)
@@ -296,4 +307,40 @@ func resolveDockerImageName(name string) string {
 		remoteName = remoteName + ":" + DefaultTag
 	}
 	return fmt.Sprintf("%s/%s", hostname, remoteName)
+}
+
+// common code for task stop/kill using the containerd gRPC API
+func stopTasks(ctx context.Context, ctr containerd.Container) error {
+	task, err := ctr.Task(ctx, nil)
+	if err != nil {
+		if err != containerd.ErrNoRunningTask {
+			return err
+		}
+		//nothing to do; no task running
+		return nil
+	}
+	status, err := task.Status(ctx)
+	switch status {
+	case containerd.Stopped:
+		log.Debugf("STOP: task state stopped")
+		_, err := task.Delete(ctx)
+		if err != nil {
+			return err
+		}
+	case containerd.Running:
+		log.Debugf("STOP: task state running")
+		err := task.Kill(ctx, syscall.SIGKILL)
+		if err != nil {
+			log.Debugf("STOP: error killing task; try to delete anyway")
+			task.Delete(ctx)
+			return err
+		}
+		_, err = task.Delete(ctx)
+		if err != nil {
+			return err
+		}
+	case containerd.Paused:
+		return fmt.Errorf("Can't stop a paused container; unpause first")
+	}
+	return nil
 }

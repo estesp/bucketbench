@@ -1,0 +1,10 @@
+name: DockerRunOnly
+image: alpine:latest
+detached: true
+drivers:
+  - 
+   type: Docker
+   threads: 3
+   iterations: 10
+commands:
+  - run

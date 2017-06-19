@@ -21,7 +21,7 @@ type LimitBench struct {
 }
 
 // Init initializes the benchmark
-func (lb *LimitBench) Init(name string, driverType driver.Type, binaryPath, imageInfo string, trace bool) error {
+func (lb *LimitBench) Init(name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error {
 	return nil
 }
 

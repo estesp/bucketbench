@@ -36,6 +36,10 @@ type Container interface {
 	// Image returns either a bundle path (used by runc, containerd) or image name (used by Docker)
 	// that will be used by the container runtime to know what image to run/execute
 	Image() string
+
+	// Command returns an optional command that overrides the default image
+	// "CMD" or "ENTRYPOINT" for the Docker and Containerd (gRPC) drivers
+	Command() string
 }
 
 // Driver is an interface for various container engines. The integer returned from
@@ -50,7 +54,7 @@ type Driver interface {
 
 	// Create will create a container instance matching the specific needs
 	// of a driver
-	Create(name, image string, detached bool, trace bool) (Container, error)
+	Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error)
 
 	// Clean will clean the operating environment of a specific driver
 	Clean() error

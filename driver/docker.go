@@ -21,10 +21,11 @@ type DockerDriver struct {
 
 // DockerContainer is an implementation of the container metadata needed for docker
 type DockerContainer struct {
-	name      string
-	imageName string
-	detached  bool
-	trace     bool
+	name        string
+	imageName   string
+	cmdOverride string
+	detached    bool
+	trace       bool
 }
 
 // NewDockerDriver creates an instance of the docker driver, providing a path to the docker client binary
@@ -45,12 +46,13 @@ func NewDockerDriver(binaryPath string) (Driver, error) {
 
 // newDockerContainer creates the metadata object of a docker-specific container with
 // image name, container runtime name, and any required additional information
-func newDockerContainer(name, image string, detached bool, trace bool) Container {
+func newDockerContainer(name, image, cmd string, detached bool, trace bool) Container {
 	return &DockerContainer{
-		name:      name,
-		imageName: image,
-		detached:  detached,
-		trace:     trace,
+		name:        name,
+		imageName:   image,
+		cmdOverride: cmd,
+		detached:    detached,
+		trace:       trace,
 	}
 }
 
@@ -72,6 +74,12 @@ func (c *DockerContainer) Trace() bool {
 // Image returns the image name that Docker will use
 func (c *DockerContainer) Image() string {
 	return c.imageName
+}
+
+// Command returns the optional overriding command that Docker will use
+// when executing a container based on this container's image
+func (c *DockerContainer) Command() string {
+	return c.cmdOverride
 }
 
 // Type returns a driver.Type to indentify the driver implementation
@@ -97,8 +105,8 @@ func (d *DockerDriver) Info() (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (d *DockerDriver) Create(name, image string, detached bool, trace bool) (Container, error) {
-	return newDockerContainer(name, image, detached, trace), nil
+func (d *DockerDriver) Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+	return newDockerContainer(name, image, cmdOverride, detached, trace), nil
 }
 
 // Clean will clean the environment; removing any exited containers
