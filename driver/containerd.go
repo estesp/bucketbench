@@ -107,6 +107,20 @@ func (r *ContainerdDriver) Type() Type {
 	return Containerd
 }
 
+// Path returns the address (socket path) of the gRPC containerd API endpoint
+func (r *ContainerdDriver) Path() string {
+	return r.ctrdAddress
+}
+
+// Close allows the driver to handle any resource free/connection closing
+// as necessary.
+func (r *ContainerdDriver) Close() error {
+	if err := r.client.Close(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Info returns
 func (r *ContainerdDriver) Info() (string, error) {
 	version, err := r.client.Version(r.context)
@@ -148,11 +162,11 @@ func (r *ContainerdDriver) Clean() error {
 		log.Infof("containerd cleanup: Pass #%d", tries+1)
 		// kill/stop and remove containers
 		for _, ctr := range list {
-			if err := stopTasks(r.context, ctr); err != nil {
-				log.Errorf("Error stopping container: %v: %v", ctr, err)
+			if err := stopTask(r.context, ctr); err != nil {
+				log.Errorf("Error stopping container: %v", err)
 			}
 			if err := ctr.Delete(r.context); err != nil {
-				log.Errorf("Error deleting container %v: %v", ctr, err)
+				log.Errorf("Error deleting container %v", err)
 			}
 		}
 		tries++
@@ -213,7 +227,7 @@ func (r *ContainerdDriver) Stop(ctr Container) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	if err = stopTasks(r.context, container); err != nil {
+	if err = stopTask(r.context, container); err != nil {
 		return "", 0, err
 	}
 	elapsed := time.Since(start)
@@ -313,7 +327,7 @@ func resolveDockerImageName(name string) string {
 }
 
 // common code for task stop/kill using the containerd gRPC API
-func stopTasks(ctx context.Context, ctr containerd.Container) error {
+func stopTask(ctx context.Context, ctr containerd.Container) error {
 	task, err := ctr.Task(ctx, nil)
 	if err != nil {
 		if err != containerd.ErrNoRunningTask {
@@ -330,10 +344,22 @@ func stopTasks(ctx context.Context, ctr containerd.Container) error {
 			return err
 		}
 	case containerd.Running:
+		statusC := make(chan uint32, 1)
+		go func() {
+			status, err := task.Wait(ctx)
+			if err != nil {
+				log.Errorf("container %q: error during wait: %v", ctr.ID(), err)
+			}
+			statusC <- status
+		}()
 		err := task.Kill(ctx, syscall.SIGKILL)
 		if err != nil {
 			task.Delete(ctx)
 			return err
+		}
+		status := <-statusC
+		if status != 0 {
+			log.Debugf("%s: exited container process: code: %d", ctr.ID(), status)
 		}
 		_, err = task.Delete(ctx)
 		if err != nil {

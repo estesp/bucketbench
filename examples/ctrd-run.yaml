@@ -1,4 +1,4 @@
-name: CtrdOnly
+name: CtrdRunOnly
 image: alpine
 command: date
 detached: true
@@ -6,8 +6,6 @@ drivers:
   - 
    type: Containerd
    threads: 5
-   iterations: 10
+   iterations: 50
 commands:
   - run
-  - stop
-  - delete

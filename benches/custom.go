@@ -88,8 +88,14 @@ func (cb *CustomBench) Run(threads, iterations int, commands []string) error {
 	cb.state = Running
 	start := time.Now()
 	for i := 0; i < threads; i++ {
+		// create a driver instance for each thread to protect from drivers
+		// which may not be threadsafe (e.g. gRPC client connection in containerd?)
+		drv, err := driver.New(cb.driver.Type(), cb.driver.Path())
+		if err != nil {
+			return fmt.Errorf("error creating new driver for thread %d: %v", i, err)
+		}
 		cb.wg.Add(1)
-		go cb.runThread(i, iterations, commands, statChan[i])
+		go cb.runThread(drv, i, iterations, commands, statChan[i])
 	}
 	cb.wg.Wait()
 	cb.elapsed = time.Since(start)
@@ -109,14 +115,14 @@ func (cb *CustomBench) Run(threads, iterations int, commands []string) error {
 	return nil
 }
 
-func (cb *CustomBench) runThread(threadNum, iterations int, commands []string, stats chan RunStatistics) {
+func (cb *CustomBench) runThread(driver driver.Driver, threadNum, iterations int, commands []string, stats chan RunStatistics) {
 	for i := 0; i < iterations; i++ {
 		errors := make(map[string]int)
 		durations := make(map[string]int)
 		// commands are specified in the passed in array; we will need
 		// a container for each set of commands:
 		name := fmt.Sprintf("bb-ctr-%d-%d", threadNum, i)
-		ctr, err := cb.driver.Create(name, cb.imageInfo, cb.cmdOverride, true, cb.trace)
+		ctr, err := driver.Create(name, cb.imageInfo, cb.cmdOverride, true, cb.trace)
 		if err != nil {
 			log.Errorf("Error on creating container %q from image %q: %v", name, cb.imageInfo, err)
 		}
@@ -124,35 +130,35 @@ func (cb *CustomBench) runThread(threadNum, iterations int, commands []string, s
 		for _, cmd := range commands {
 			switch strings.ToLower(cmd) {
 			case "run", "start":
-				out, runElapsed, err := cb.driver.Run(ctr)
+				out, runElapsed, err := driver.Run(ctr)
 				if err != nil {
 					errors[cmd]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations[cmd] = runElapsed
 			case "stop", "kill":
-				out, stopElapsed, err := cb.driver.Stop(ctr)
+				out, stopElapsed, err := driver.Stop(ctr)
 				if err != nil {
 					errors[cmd]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations[cmd] = stopElapsed
 			case "remove", "erase", "delete":
-				out, rmElapsed, err := cb.driver.Remove(ctr)
+				out, rmElapsed, err := driver.Remove(ctr)
 				if err != nil {
 					errors[cmd]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations[cmd] = rmElapsed
 			case "pause":
-				out, pauseElapsed, err := cb.driver.Pause(ctr)
+				out, pauseElapsed, err := driver.Pause(ctr)
 				if err != nil {
 					errors[cmd]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations[cmd] = pauseElapsed
 			case "unpause", "resume":
-				out, unpauseElapsed, err := cb.driver.Unpause(ctr)
+				out, unpauseElapsed, err := driver.Unpause(ctr)
 				if err != nil {
 					errors[cmd]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
@@ -166,6 +172,9 @@ func (cb *CustomBench) runThread(threadNum, iterations int, commands []string, s
 			Durations: durations,
 			Errors:    errors,
 		}
+	}
+	if err := driver.Close(); err != nil {
+		log.Errorf("error on closing driver: %v", err)
 	}
 	close(stats)
 	cb.wg.Done()

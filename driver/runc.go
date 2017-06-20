@@ -96,6 +96,17 @@ func (r *RuncDriver) Type() Type {
 	return Runc
 }
 
+// Path returns the binary path of the runc binary in use
+func (r *RuncDriver) Path() string {
+	return r.runcBinary
+}
+
+// Close allows the driver to handle any resource free/connection closing
+// as necessary. Runc has no need to perform any actions on close.
+func (r *RuncDriver) Close() error {
+	return nil
+}
+
 // Info returns
 func (r *RuncDriver) Info() (string, error) {
 	info := "runc driver (binary: " + r.runcBinary + ")\n"

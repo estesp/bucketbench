@@ -52,6 +52,9 @@ type Driver interface {
 	// Info returns a string with information about the container engine/runtime details
 	Info() (string, error)
 
+	// Path returns the binary (or socket) path related to the runtime in use
+	Path() string
+
 	// Create will create a container instance matching the specific needs
 	// of a driver
 	Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error)
@@ -73,6 +76,10 @@ type Driver interface {
 
 	// Unpause will unpause/resume a container
 	Unpause(ctr Container) (string, int, error)
+
+	// Close allows the driver to free any resources/close any
+	// connections
+	Close() error
 }
 
 // New creates a driver instance of a specific type

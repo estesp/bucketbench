@@ -95,6 +95,17 @@ func (r *CtrDriver) Type() Type {
 	return Ctr
 }
 
+// Path returns the binary path of the ctr binary in use
+func (r *CtrDriver) Path() string {
+	return r.ctrBinary
+}
+
+// Close allows the driver to handle any resource free/connection closing
+// as necessary. Ctr has no need to perform any actions on close.
+func (r *CtrDriver) Close() error {
+	return nil
+}
+
 // Info returns
 func (r *CtrDriver) Info() (string, error) {
 	info := "containerd legacy driver (ctr client binary: " + r.ctrBinary + ")"
