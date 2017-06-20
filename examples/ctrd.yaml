@@ -1,5 +1,5 @@
 name: CtrdRunOnly
-image: busybox
+image: alpine
 command: date
 detached: true
 drivers:

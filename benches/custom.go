@@ -102,6 +102,10 @@ func (cb *CustomBench) Run(threads, iterations int, commands []string) error {
 		}
 	}
 	cb.state = Completed
+	// final environment cleanup
+	if err := cb.driver.Clean(); err != nil {
+		return fmt.Errorf("Error during driver final cleanup: %v", err)
+	}
 	return nil
 }
 
