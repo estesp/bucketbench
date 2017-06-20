@@ -87,6 +87,17 @@ func (d *DockerDriver) Type() Type {
 	return Docker
 }
 
+// Path returns the binary path of the docker binary in use
+func (d *DockerDriver) Path() string {
+	return d.dockerBinary
+}
+
+// Close allows the driver to handle any resource free/connection closing
+// as necessary. Docker has no need to perform any actions on close.
+func (d *DockerDriver) Close() error {
+	return nil
+}
+
 // Info returns
 func (d *DockerDriver) Info() (string, error) {
 	if d.dockerInfo != "" {
