@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -189,7 +190,9 @@ func (r *ContainerdDriver) Run(ctr Container) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	task, err := container.NewTask(r.context, containerd.Stdio)
+
+	stdouterr := bytes.NewBuffer(nil)
+	task, err := container.NewTask(r.context, containerd.NewIO(bytes.NewBuffer(nil), stdouterr, stdouterr))
 	if err != nil {
 		return "", 0, err
 	}
@@ -199,7 +202,7 @@ func (r *ContainerdDriver) Run(ctr Container) (string, int, error) {
 	}
 	elapsed := time.Since(start)
 	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-	return "", msElapsed, nil
+	return stdouterr.String(), msElapsed, nil
 }
 
 // Stop will stop/kill a container (specifically, the tasks [processes]
@@ -322,16 +325,13 @@ func stopTasks(ctx context.Context, ctr containerd.Container) error {
 	status, err := task.Status(ctx)
 	switch status {
 	case containerd.Stopped:
-		log.Debugf("STOP: task state stopped")
 		_, err := task.Delete(ctx)
 		if err != nil {
 			return err
 		}
 	case containerd.Running:
-		log.Debugf("STOP: task state running")
 		err := task.Kill(ctx, syscall.SIGKILL)
 		if err != nil {
-			log.Debugf("STOP: error killing task; try to delete anyway")
 			task.Delete(ctx)
 			return err
 		}
