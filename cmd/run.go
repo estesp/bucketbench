@@ -18,10 +18,14 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"os"
+	"text/tabwriter"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/estesp/bucketbench/benches"
 	"github.com/estesp/bucketbench/driver"
 	"github.com/go-yaml/yaml"
+	"github.com/montanaflynn/stats"
 	"github.com/spf13/cobra"
 )
 
@@ -43,6 +47,7 @@ type benchResult struct {
 	threads     int
 	iterations  int
 	threadRates []float64
+	statistics  [][]benches.RunStatistics
 }
 
 var runCmd = &cobra.Command{
@@ -119,9 +124,11 @@ func runLimitTest() []float64 {
 func runBenchmark(driverConfig benches.DriverConfig, benchmark benches.Benchmark) (benchResult, error) {
 	var (
 		rates     []float64
+		stats     [][]benches.RunStatistics
 		benchInfo string
 	)
 	driverType := driver.StringToType(driverConfig.Type)
+	stats = make([][]benches.RunStatistics, driverConfig.Threads)
 
 	for i := 1; i <= driverConfig.Threads; i++ {
 		bench, _ := benches.New(benches.Custom)
@@ -149,6 +156,7 @@ func runBenchmark(driverConfig benches.DriverConfig, benchmark benches.Benchmark
 		duration := bench.Elapsed()
 		rate := float64(i*driverConfig.Iterations) / duration.Seconds()
 		rates = append(rates, rate)
+		stats[i-1] = bench.Stats()
 		log.Infof("%s: threads %d, iterations %d, rate: %6.2f", benchInfo, i, driverConfig.Iterations, rate)
 	}
 	result := benchResult{
@@ -156,24 +164,121 @@ func runBenchmark(driverConfig benches.DriverConfig, benchmark benches.Benchmark
 		threads:     driverConfig.Threads,
 		iterations:  driverConfig.Iterations,
 		threadRates: rates,
+		statistics:  stats,
 	}
 	return result, nil
 }
 
 func outputRunDetails(maxThreads int, results []benchResult) {
-	fmt.Printf("             Iter/Thd     1 thrd")
+	w := tabwriter.NewWriter(os.Stdout, 10, 4, 2, ' ', tabwriter.AlignRight)
+
+	fmt.Printf("\nSUMMARY TIMINGS/THREAD RATES\n\n")
+	fmt.Fprintf(w, " \tIter/Thd\t1 thrd")
 	for i := 2; i <= maxThreads; i++ {
-		fmt.Printf(" %2d thrds", i)
+		fmt.Fprintf(w, "\t%d thrds", i)
 	}
+	fmt.Fprintln(w, "\t ")
+
 	for _, result := range results {
-		fmt.Printf("\n%-15s %5d    %7.2f", result.name, result.iterations, result.threadRates[0])
+		fmt.Fprintf(w, "%s\t%d\t%7.2f", result.name, result.iterations, result.threadRates[0])
 		for i := 1; i < result.threads; i++ {
-			fmt.Printf("  %7.2f", result.threadRates[i])
+			fmt.Fprintf(w, "\t%7.2f", result.threadRates[i])
 		}
+		fmt.Fprintln(w, "\t ")
 	}
-	fmt.Printf("\n\n")
+	w.Flush()
+	fmt.Println("")
+
+	fmt.Printf("DETAILED COMMAND TIMINGS/STATISTICS\n")
+	// output per-command timings across the runs as well
+	for _, result := range results {
+		for i := 0; i < result.threads; i++ {
+			fmt.Fprintf(w, "%s:%d\tMin\tMax\tAvg\tMedian\tStddev\tErrors\t\n", result.name, i+1)
+			cmdTimings := parseStats(result.statistics[i])
+			for cmd, stats := range cmdTimings {
+				fmt.Fprintf(w, "%s\t%6.2f\t%6.2f\t%6.2f\t%6.2f\t%6.2f\t%d\t\n", cmd, stats.min, stats.max, stats.avg, stats.median, stats.stddev, stats.errors)
+			}
+		}
+		fmt.Println("")
+	}
+	w.Flush()
 }
 
+type statResults struct {
+	min    float64
+	max    float64
+	avg    float64
+	median float64
+	stddev float64
+	errors int
+}
+
+func parseStats(statistics []benches.RunStatistics) map[string]statResults {
+	result := make(map[string]statResults)
+	durationSeq := make(map[string][]float64)
+	errorSeq := make(map[string][]int)
+	iterations := len(statistics)
+
+	durationKeys := make([]string, len(statistics[0].Durations))
+	i := 0
+	for k := range statistics[0].Durations {
+		durationKeys[i] = k
+		i++
+	}
+	for i := 0; i < iterations; i++ {
+		for key, duration := range statistics[i].Durations {
+			durationSeq[key] = append(durationSeq[key], float64(duration))
+		}
+		for key, errors := range statistics[i].Errors {
+			errorSeq[key] = append(errorSeq[key], errors)
+		}
+	}
+	for _, key := range durationKeys {
+		// take the durations for this key and perform
+		// several math/statistical functions:
+		min, err := stats.Min(durationSeq[key])
+		if err != nil {
+			log.Errorf("Error finding stats.Min(): %v", err)
+		}
+		max, err := stats.Max(durationSeq[key])
+		if err != nil {
+			log.Errorf("Error finding stats.Max(): %v", err)
+		}
+		average, err := stats.Mean(durationSeq[key])
+		if err != nil {
+			log.Errorf("Error finding stats.Average(): %v", err)
+		}
+		median, err := stats.Median(durationSeq[key])
+		if err != nil {
+			log.Errorf("Error finding stats.Median(): %v", err)
+		}
+		stddev, err := stats.StandardDeviation(durationSeq[key])
+		if err != nil {
+			log.Errorf("Error finding stats.StdDev(): %v", err)
+		}
+		var errors int
+		if errorSlice, ok := errorSeq[key]; ok {
+			errors = intSum(errorSlice)
+		}
+		result[key] = statResults{
+			min:    min,
+			max:    max,
+			avg:    average,
+			median: median,
+			stddev: stddev,
+			errors: errors,
+		}
+	}
+	return result
+}
+
+func intSum(slice []int) int {
+	var total int
+	for _, val := range slice {
+		total += val
+	}
+	return total
+}
 func intMax(x, y int) int {
 	if x > y {
 		return x
