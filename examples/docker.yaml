@@ -1,10 +1,12 @@
-name: DockerRunOnly
+name: DockerBasic
 image: alpine:latest
 detached: true
 drivers:
   - 
    type: Docker
    threads: 3
-   iterations: 10
+   iterations: 15
 commands:
   - run
+  - stop
+  - delete
