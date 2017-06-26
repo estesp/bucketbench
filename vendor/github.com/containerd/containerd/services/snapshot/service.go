@@ -3,9 +3,9 @@ package snapshot
 import (
 	gocontext "context"
 
-	snapshotapi "github.com/containerd/containerd/api/services/snapshot"
-	"github.com/containerd/containerd/api/types/event"
-	mounttypes "github.com/containerd/containerd/api/types/mount"
+	eventsapi "github.com/containerd/containerd/api/services/events/v1"
+	snapshotapi "github.com/containerd/containerd/api/services/snapshot/v1"
+	"github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/mount"
@@ -63,7 +63,7 @@ func (s *service) Prepare(ctx context.Context, pr *snapshotapi.PrepareSnapshotRe
 		return nil, grpcError(err)
 	}
 
-	if err := s.emit(ctx, "/snapshot/prepare", event.SnapshotPrepare{
+	if err := s.emit(ctx, "/snapshot/prepare", &eventsapi.SnapshotPrepare{
 		Key:    pr.Key,
 		Parent: pr.Parent,
 	}); err != nil {
@@ -108,7 +108,7 @@ func (s *service) Commit(ctx context.Context, cr *snapshotapi.CommitSnapshotRequ
 		return nil, grpcError(err)
 	}
 
-	if err := s.emit(ctx, "/snapshot/commit", event.SnapshotCommit{
+	if err := s.emit(ctx, "/snapshot/commit", &eventsapi.SnapshotCommit{
 		Key:  cr.Key,
 		Name: cr.Name,
 	}); err != nil {
@@ -125,7 +125,7 @@ func (s *service) Remove(ctx context.Context, rr *snapshotapi.RemoveSnapshotRequ
 		return nil, grpcError(err)
 	}
 
-	if err := s.emit(ctx, "/snapshot/remove", event.SnapshotRemove{
+	if err := s.emit(ctx, "/snapshot/remove", &eventsapi.SnapshotRemove{
 		Key: rr.Key,
 	}); err != nil {
 		return nil, err
@@ -227,10 +227,10 @@ func fromUsage(usage snapshot.Usage) *snapshotapi.UsageResponse {
 	}
 }
 
-func fromMounts(mounts []mount.Mount) []*mounttypes.Mount {
-	out := make([]*mounttypes.Mount, len(mounts))
+func fromMounts(mounts []mount.Mount) []*types.Mount {
+	out := make([]*types.Mount, len(mounts))
 	for i, m := range mounts {
-		out[i] = &mounttypes.Mount{
+		out[i] = &types.Mount{
 			Type:    m.Type,
 			Source:  m.Source,
 			Options: m.Options,

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/boltdb/bolt"
+	"github.com/containerd/containerd/identifiers"
 	"github.com/containerd/containerd/namespaces"
 )
 
@@ -18,6 +19,10 @@ func NewNamespaceStore(tx *bolt.Tx) namespaces.Store {
 func (s *namespaceStore) Create(ctx context.Context, namespace string, labels map[string]string) error {
 	topbkt, err := createBucketIfNotExists(s.tx, bucketKeyVersion)
 	if err != nil {
+		return err
+	}
+
+	if err := identifiers.Validate(namespace); err != nil {
 		return err
 	}
 
