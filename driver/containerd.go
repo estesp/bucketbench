@@ -165,7 +165,7 @@ func (r *ContainerdDriver) Clean() error {
 			if err := stopTask(r.context, ctr); err != nil {
 				log.Errorf("Error stopping container: %v", err)
 			}
-			if err := ctr.Delete(r.context); err != nil {
+			if err := ctr.Delete(r.context, containerd.WithRootFSDeletion); err != nil {
 				log.Errorf("Error deleting container %v", err)
 			}
 		}
@@ -243,7 +243,7 @@ func (r *ContainerdDriver) Remove(ctr Container) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	err = container.Delete(r.context)
+	err = container.Delete(r.context, containerd.WithRootFSDeletion)
 	if err != nil {
 		return "", 0, err
 	}
