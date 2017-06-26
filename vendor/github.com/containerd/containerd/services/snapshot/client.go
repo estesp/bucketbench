@@ -8,8 +8,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 
-	snapshotapi "github.com/containerd/containerd/api/services/snapshot"
-	mountapi "github.com/containerd/containerd/api/types/mount"
+	snapshotapi "github.com/containerd/containerd/api/services/snapshot/v1"
+	"github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/mount"
 	"github.com/containerd/containerd/snapshot"
 	"github.com/pkg/errors"
@@ -146,7 +146,7 @@ func toUsage(resp *snapshotapi.UsageResponse) snapshot.Usage {
 	}
 }
 
-func toMounts(mm []*mountapi.Mount) []mount.Mount {
+func toMounts(mm []*types.Mount) []mount.Mount {
 	mounts := make([]mount.Mount, len(mm))
 	for i, m := range mm {
 		mounts[i] = mount.Mount{
