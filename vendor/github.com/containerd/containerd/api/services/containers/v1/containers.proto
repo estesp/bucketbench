@@ -15,7 +15,7 @@ option go_package = "github.com/containerd/containerd/api/services/containers/v1
 // service.
 //
 // The objects here provide an state-independent view of containers for use in
-// management and resource pinning. From that perspective, contaienrs do not
+// management and resource pinning. From that perspective, containers do not
 // have a "state" but rather this is the set of resources that will be
 // considered in use by the container.
 //
@@ -57,13 +57,16 @@ message Container {
 		// Name is the name of the runtime.
 		string name = 1;
 		// Options specify additional runtime initialization options.
-		map<string, string> options = 2;
+		google.protobuf.Any options = 2;
 	}
 	// Runtime specifies which runtime to use for executing this container.
 	Runtime runtime = 4;
 
 	// Spec to be used when creating the container. This is runtime specific.
 	google.protobuf.Any spec = 5;
+
+	// Snapshotter specifies the snapshotter name used for rootfs
+	string snapshotter = 6;
 
 	// RootFS specifies the snapshot key to use for the container's root
 	// filesystem. When starting a task from this container, a caller should
@@ -73,13 +76,13 @@ message Container {
 	// Snapshots referenced in this field will not be garbage collected.
 	//
 	// This field may be updated.
-	string rootfs = 6 [(gogoproto.customname) = "RootFS"];
+	string rootfs = 7 [(gogoproto.customname) = "RootFS"];
 
 	// CreatedAt is the time the container was first created.
-	google.protobuf.Timestamp created_at = 7 [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+	google.protobuf.Timestamp created_at = 8 [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
 
 	// UpdatedAt is the last time the container was mutated.
-	google.protobuf.Timestamp updated_at = 8 [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
+	google.protobuf.Timestamp updated_at = 9 [(gogoproto.stdtime) = true, (gogoproto.nullable) = false];
 }
 
 message GetContainerRequest {
@@ -91,7 +94,17 @@ message GetContainerResponse {
 }
 
 message ListContainersRequest {
-	string filter = 1; // TODO(stevvooe): Define a filtering syntax to make these queries.
+	// Filters contains one or more filters using the syntax defined in the
+	// containerd filter package.
+	//
+	// The returned result will be those that match any of the provided
+	// filters. Expanded, containers that match the following will be
+	// returned:
+	//
+	//   filters[0] or filters[1] or ... or filters[n-1] or filters[n]
+	//
+	// If filters is zero-length or nil, all items will be returned.
+	repeated string filters = 1;
 }
 
 message ListContainersResponse {
