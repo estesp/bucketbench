@@ -1,50 +1,49 @@
-// Package identifiers provides common validation for identifiers, keys and ids
+// Package identifiers provides common validation for identifiers and keys
 // across containerd.
 //
-// To allow such identifiers to be used across various contexts safely, the character
-// set has been restricted to that defined for domains in RFC 1035, section
-// 2.3.1. This will make identifiers safe for use across networks, filesystems
-// and other media.
+// Identifiers in containerd must be a alphanumeric, allowing limited
+// underscores, dashes and dots.
 //
-// While the character set may expand in the future, we guarantee that the
-// identifiers will be safe for use as filesystem path components.
+// While the character set may be expanded in the future, identifiers
+// are guaranteed to be safely used as filesystem path components.
 package identifiers
 
 import (
 	"regexp"
 
+	"github.com/containerd/containerd/errdefs"
 	"github.com/pkg/errors"
 )
 
 const (
-	label = `[A-Za-z][A-Za-z0-9]+(?:[-]+[A-Za-z0-9]+)*`
+	maxLength  = 76
+	alphanum   = `[A-Za-z0-9]+`
+	separators = `[._-]`
 )
 
 var (
-	// identifierRe validates that a identifier matches valid identifiers.
-	//
-	// Rules for domains, defined in RFC 1035, section 2.3.1, are used for
-	// identifiers.
-	identifierRe = regexp.MustCompile(reAnchor(label + reGroup("[.]"+reGroup(label)) + "*"))
-
-	errIdentifierInvalid = errors.Errorf("invalid, must match %v", identifierRe)
+	// identifierRe defines the pattern for valid identifiers.
+	identifierRe = regexp.MustCompile(reAnchor(alphanum + reGroup(separators+reGroup(alphanum)) + "*"))
 )
-
-// IsInvalid return true if the error was due to an invalid identifer.
-func IsInvalid(err error) bool {
-	return errors.Cause(err) == errIdentifierInvalid
-}
 
 // Validate return nil if the string s is a valid identifier.
 //
-// identifiers must be valid domain identifiers according to RFC 1035, section 2.3.1.  To
+// identifiers must be valid domain names according to RFC 1035, section 2.3.1.  To
 // enforce case insensitvity, all characters must be lower case.
 //
 // In general, identifiers that pass this validation, should be safe for use as
-// a domain identifier or filesystem path component.
+// a domain names or filesystem path component.
 func Validate(s string) error {
+	if len(s) == 0 {
+		return errors.Wrapf(errdefs.ErrInvalidArgument, "identifier must not be empty")
+	}
+
+	if len(s) > maxLength {
+		return errors.Wrapf(errdefs.ErrInvalidArgument, "identifier %q greater than maximum length (%d characters)", s, maxLength)
+	}
+
 	if !identifierRe.MatchString(s) {
-		return errors.Wrapf(errIdentifierInvalid, "identifier %q", s)
+		return errors.Wrapf(errdefs.ErrInvalidArgument, "identifier %q must match %v", s, identifierRe)
 	}
 	return nil
 }
