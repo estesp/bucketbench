@@ -4,7 +4,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
 	api "github.com/containerd/containerd/api/services/content/v1"
 	eventsapi "github.com/containerd/containerd/api/services/events/v1"
@@ -17,14 +16,15 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
 
 type Service struct {
-	store   content.Store
-	emitter events.Poster
+	store     content.Store
+	publisher events.Publisher
 }
 
 var bufPool = sync.Pool{
@@ -58,8 +58,8 @@ func NewService(ic *plugin.InitContext) (interface{}, error) {
 	}
 	cs := metadata.NewContentStore(m.(*bolt.DB), c.(content.Store))
 	return &Service{
-		store:   cs,
-		emitter: events.GetPoster(ic.Context),
+		store:     cs,
+		publisher: ic.Events,
 	}, nil
 }
 
@@ -149,7 +149,7 @@ func (s *Service) Delete(ctx context.Context, req *api.DeleteContentRequest) (*e
 		return nil, errdefs.ToGRPC(err)
 	}
 
-	if err := s.emit(ctx, "/content/delete", &eventsapi.ContentDelete{
+	if err := s.publisher.Publish(ctx, "/content/delete", &eventsapi.ContentDelete{
 		Digest: req.Digest,
 	}); err != nil {
 		return nil, err
@@ -458,13 +458,4 @@ func (s *Service) Abort(ctx context.Context, req *api.AbortRequest) (*empty.Empt
 	}
 
 	return &empty.Empty{}, nil
-}
-
-func (s *Service) emit(ctx context.Context, topic string, evt interface{}) error {
-	emitterCtx := events.WithTopic(ctx, topic)
-	if err := s.emitter.Post(emitterCtx, evt); err != nil {
-		return err
-	}
-
-	return nil
 }

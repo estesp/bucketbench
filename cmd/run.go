@@ -21,11 +21,11 @@ import (
 	"os"
 	"text/tabwriter"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/estesp/bucketbench/benches"
 	"github.com/estesp/bucketbench/driver"
 	"github.com/go-yaml/yaml"
 	"github.com/montanaflynn/stats"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 

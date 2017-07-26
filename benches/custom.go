@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/estesp/bucketbench/driver"
+	log "github.com/sirupsen/logrus"
 )
 
 // CustomBench benchmark runs a series of container lifecycle operations as
