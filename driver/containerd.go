@@ -8,10 +8,10 @@ import (
 	"syscall"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/namespaces"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	log "github.com/sirupsen/logrus"
 )
 
 const defaultContainerdPath = "/run/containerd/containerd.sock"
@@ -165,7 +165,7 @@ func (r *ContainerdDriver) Clean() error {
 			if err := stopTask(r.context, ctr); err != nil {
 				log.Errorf("Error stopping container: %v", err)
 			}
-			if err := ctr.Delete(r.context, containerd.WithRootFSDeletion); err != nil {
+			if err := ctr.Delete(r.context, containerd.WithSnapshotCleanup); err != nil {
 				log.Errorf("Error deleting container %v", err)
 			}
 		}
@@ -200,7 +200,7 @@ func (r *ContainerdDriver) Run(ctr Container) (string, int, error) {
 	container, err := r.client.NewContainer(r.context, ctr.Name(),
 		containerd.WithSpec(spec),
 		containerd.WithImage(image),
-		containerd.WithNewRootFS(ctr.Name(), image))
+		containerd.WithNewSnapshot(ctr.Name(), image))
 	if err != nil {
 		return "", 0, err
 	}
@@ -243,7 +243,7 @@ func (r *ContainerdDriver) Remove(ctr Container) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	err = container.Delete(r.context, containerd.WithRootFSDeletion)
+	err = container.Delete(r.context, containerd.WithSnapshotCleanup)
 	if err != nil {
 		return "", 0, err
 	}
@@ -330,7 +330,7 @@ func resolveDockerImageName(name string) string {
 func stopTask(ctx context.Context, ctr containerd.Container) error {
 	task, err := ctr.Task(ctx, nil)
 	if err != nil {
-		if err != containerd.ErrNoRunningTask {
+		if !strings.Contains(err.Error(), "no running task") {
 			return err
 		}
 		//nothing to do; no task running

@@ -17,8 +17,8 @@ package main
 import (
 	"os"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/estesp/bucketbench/cmd"
+	log "github.com/sirupsen/logrus"
 )
 
 func main() {
