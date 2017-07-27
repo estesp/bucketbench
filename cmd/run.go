@@ -189,14 +189,24 @@ func outputRunDetails(maxThreads int, results []benchResult) {
 	w.Flush()
 	fmt.Println("")
 
+	cmdList := []string{"run", "pause", "resume", "stop", "delete"}
 	fmt.Printf("DETAILED COMMAND TIMINGS/STATISTICS\n")
 	// output per-command timings across the runs as well
 	for _, result := range results {
+		if result.name == "Limit" {
+			// the limit "benchmark" has no detailed statistics
+			continue
+		}
 		for i := 0; i < result.threads; i++ {
 			fmt.Fprintf(w, "%s:%d\tMin\tMax\tAvg\tMedian\tStddev\tErrors\t\n", result.name, i+1)
 			cmdTimings := parseStats(result.statistics[i])
-			for cmd, stats := range cmdTimings {
-				fmt.Fprintf(w, "%s\t%6.2f\t%6.2f\t%6.2f\t%6.2f\t%6.2f\t%d\t\n", cmd, stats.min, stats.max, stats.avg, stats.median, stats.stddev, stats.errors)
+			// given we are working with a map, but we want consistent ordering in the output
+			// we walk a slice of commands in a natural/expected order and output stats for
+			// those that were used during the specific run
+			for _, cmd := range cmdList {
+				if stats, ok := cmdTimings[cmd]; ok {
+					fmt.Fprintf(w, "%s\t%6.2f\t%6.2f\t%6.2f\t%6.2f\t%6.2f\t%d\t\n", cmd, stats.min, stats.max, stats.avg, stats.median, stats.stddev, stats.errors)
+				}
 			}
 		}
 		fmt.Println("")
