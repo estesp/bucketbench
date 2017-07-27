@@ -132,38 +132,38 @@ func (cb *CustomBench) runThread(driver driver.Driver, threadNum, iterations int
 			case "run", "start":
 				out, runElapsed, err := driver.Run(ctr)
 				if err != nil {
-					errors[cmd]++
+					errors["run"]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
-				durations[cmd] = runElapsed
+				durations["run"] = runElapsed
 			case "stop", "kill":
 				out, stopElapsed, err := driver.Stop(ctr)
 				if err != nil {
-					errors[cmd]++
+					errors["stop"]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
-				durations[cmd] = stopElapsed
+				durations["stop"] = stopElapsed
 			case "remove", "erase", "delete":
 				out, rmElapsed, err := driver.Remove(ctr)
 				if err != nil {
-					errors[cmd]++
+					errors["delete"]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
-				durations[cmd] = rmElapsed
+				durations["delete"] = rmElapsed
 			case "pause":
 				out, pauseElapsed, err := driver.Pause(ctr)
 				if err != nil {
-					errors[cmd]++
+					errors["pause"]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
-				durations[cmd] = pauseElapsed
+				durations["pause"] = pauseElapsed
 			case "unpause", "resume":
 				out, unpauseElapsed, err := driver.Unpause(ctr)
 				if err != nil {
-					errors[cmd]++
+					errors["resume"]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
-				durations[cmd] = unpauseElapsed
+				durations["resume"] = unpauseElapsed
 			default:
 				log.Errorf("Command %q unrecognized from YAML commands list; skipping", cmd)
 			}
