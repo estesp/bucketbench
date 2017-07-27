@@ -228,7 +228,10 @@ func (r *ContainerdDriver) Stop(ctr Container) (string, int, error) {
 		return "", 0, err
 	}
 	if err = stopTask(r.context, container); err != nil {
-		return "", 0, err
+		// ignore if the error is that the process had already exited:
+		if !strings.Contains(err.Error(), "process already finished") {
+			return "", 0, err
+		}
 	}
 	elapsed := time.Since(start)
 	msElapsed := int(elapsed.Nanoseconds() / 1000000)
