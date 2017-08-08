@@ -340,7 +340,7 @@ func stopTask(ctx context.Context, ctr containerd.Container) error {
 		return nil
 	}
 	status, err := task.Status(ctx)
-	switch status {
+	switch status.Status {
 	case containerd.Stopped:
 		_, err := task.Delete(ctx)
 		if err != nil {
