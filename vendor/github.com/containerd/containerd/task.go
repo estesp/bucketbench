@@ -8,6 +8,7 @@ import (
 	"io"
 	goruntime "runtime"
 	"strings"
+	"sync"
 	"syscall"
 
 	eventsapi "github.com/containerd/containerd/api/services/events/v1"
@@ -15,9 +16,9 @@ import (
 	"github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/linux/runcopts"
 	"github.com/containerd/containerd/mount"
 	"github.com/containerd/containerd/rootfs"
+	"github.com/containerd/containerd/runtime"
 	"github.com/containerd/containerd/typeurl"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/specs-go/v1"
@@ -25,68 +26,90 @@ import (
 	"github.com/pkg/errors"
 )
 
+// UnknownExitStatus is returned when containerd is unable to
+// determine the exit status of a process. This can happen if the process never starts
+// or if an error was encountered when obtaining the exit status, it is set to 255.
 const UnknownExitStatus = 255
 
-type TaskStatus string
+// Status returns process status and exit information
+type Status struct {
+	// Status of the process
+	Status ProcessStatus
+	// ExitStatus returned by the process
+	ExitStatus uint32
+}
+
+type ProcessStatus string
 
 const (
-	Running TaskStatus = "running"
-	Created TaskStatus = "created"
-	Stopped TaskStatus = "stopped"
-	Paused  TaskStatus = "paused"
-	Pausing TaskStatus = "pausing"
+	// Running indicates the process is currently executing
+	Running ProcessStatus = "running"
+	// Created indicates the process has been created within containerd but the
+	// user's defined process has not started
+	Created ProcessStatus = "created"
+	// Stopped indicates that the process has ran and exited
+	Stopped ProcessStatus = "stopped"
+	// Paused indicates that the process is currently paused
+	Paused ProcessStatus = "paused"
+	// Pausing indicates that the process is currently switching from a
+	// running state into a paused state
+	Pausing ProcessStatus = "pausing"
 )
 
+// IOCloseInfo allows specific io pipes to be closed on a process
 type IOCloseInfo struct {
 	Stdin bool
 }
 
+// IOCloserOpts allows the caller to set specific pipes as closed on a process
 type IOCloserOpts func(*IOCloseInfo)
 
+// WithStdinCloser closes the stdin of a process
 func WithStdinCloser(r *IOCloseInfo) {
 	r.Stdin = true
 }
 
+// CheckpointTaskInfo allows specific checkpoint information to be set for the task
 type CheckpointTaskInfo struct {
+	// ParentCheckpoint is the digest of a parent checkpoint
 	ParentCheckpoint digest.Digest
-	Options          interface{}
+	// Options hold runtime specific settings for checkpointing a task
+	Options interface{}
 }
 
+// CheckpointTaskOpts allows the caller to set checkpoint options
 type CheckpointTaskOpts func(*CheckpointTaskInfo) error
 
+// TaskInfo sets options for task creation
 type TaskInfo struct {
+	// Checkpoint is the Descriptor for an existing checkpoint that can be used
+	// to restore a task's runtime and memory state
 	Checkpoint *types.Descriptor
-	RootFS     []mount.Mount
-	Options    interface{}
+	// RootFS is a list of mounts to use as the task's root filesystem
+	RootFS []mount.Mount
+	// Options hold runtime specific settings for task creation
+	Options interface{}
 }
 
+// Task is the executable object within containerd
 type Task interface {
-	Pid() uint32
-	Delete(context.Context) (uint32, error)
-	Kill(context.Context, syscall.Signal) error
-	Pause(context.Context) error
-	Resume(context.Context) error
-	Start(context.Context) error
-	Status(context.Context) (TaskStatus, error)
-	Wait(context.Context) (uint32, error)
-	Exec(context.Context, string, *specs.Process, IOCreation) (Process, error)
-	Pids(context.Context) ([]uint32, error)
-	CloseIO(context.Context, ...IOCloserOpts) error
-	Resize(ctx context.Context, w, h uint32) error
-	IO() *IO
-	Checkpoint(context.Context, ...CheckpointTaskOpts) (v1.Descriptor, error)
-	Update(context.Context, ...UpdateTaskOpts) error
-}
+	Process
 
-type Process interface {
-	Pid() uint32
-	Start(context.Context) error
-	Delete(context.Context) (uint32, error)
-	Kill(context.Context, syscall.Signal) error
-	Wait(context.Context) (uint32, error)
-	CloseIO(context.Context, ...IOCloserOpts) error
-	Resize(ctx context.Context, w, h uint32) error
-	IO() *IO
+	// Pause suspends the execution of the task
+	Pause(context.Context) error
+	// Resume the execution of the task
+	Resume(context.Context) error
+	// Exec creates a new process inside the task
+	Exec(context.Context, string, *specs.Process, IOCreation) (Process, error)
+	// Pids returns a list of system specific process ids inside the task
+	Pids(context.Context) ([]uint32, error)
+	// Checkpoint serializes the runtime and memory information of a task into an
+	// OCI Index that can be push and pulled from a remote resource.
+	//
+	// Additional software like CRIU maybe required to checkpoint and restore tasks
+	Checkpoint(context.Context, ...CheckpointTaskOpts) (v1.Descriptor, error)
+	// Update modifies executing tasks with updated settings
+	Update(context.Context, ...UpdateTaskOpts) error
 }
 
 var _ = (Task)(&task{})
@@ -98,6 +121,7 @@ type task struct {
 	id  string
 	pid uint32
 
+	mu       sync.Mutex
 	deferred *tasks.CreateTaskRequest
 }
 
@@ -107,9 +131,14 @@ func (t *task) Pid() uint32 {
 }
 
 func (t *task) Start(ctx context.Context) error {
-	if t.deferred != nil {
-		response, err := t.client.TaskService().Create(ctx, t.deferred)
+	t.mu.Lock()
+	deferred := t.deferred
+	t.mu.Unlock()
+	if deferred != nil {
+		response, err := t.client.TaskService().Create(ctx, deferred)
+		t.mu.Lock()
 		t.deferred = nil
+		t.mu.Unlock()
 		if err != nil {
 			t.io.closer.Close()
 			return err
@@ -117,7 +146,7 @@ func (t *task) Start(ctx context.Context) error {
 		t.pid = response.Pid
 		return nil
 	}
-	_, err := t.client.TaskService().Start(ctx, &tasks.StartTaskRequest{
+	_, err := t.client.TaskService().Start(ctx, &tasks.StartRequest{
 		ContainerID: t.id,
 	})
 	if err != nil {
@@ -151,21 +180,40 @@ func (t *task) Resume(ctx context.Context) error {
 	return errdefs.FromGRPC(err)
 }
 
-func (t *task) Status(ctx context.Context) (TaskStatus, error) {
-	r, err := t.client.TaskService().Get(ctx, &tasks.GetTaskRequest{
+func (t *task) Status(ctx context.Context) (Status, error) {
+	r, err := t.client.TaskService().Get(ctx, &tasks.GetRequest{
 		ContainerID: t.id,
 	})
 	if err != nil {
-		return "", errdefs.FromGRPC(err)
+		return Status{}, errdefs.FromGRPC(err)
 	}
-	return TaskStatus(strings.ToLower(r.Task.Status.String())), nil
+	return Status{
+		Status:     ProcessStatus(strings.ToLower(r.Process.Status.String())),
+		ExitStatus: r.Process.ExitStatus,
+	}, nil
 }
 
-// Wait is a blocking call that will wait for the task to exit and return the exit status
 func (t *task) Wait(ctx context.Context) (uint32, error) {
-	eventstream, err := t.client.EventService().Subscribe(ctx, &eventsapi.SubscribeRequest{})
+	cancellable, cancel := context.WithCancel(ctx)
+	defer cancel()
+	eventstream, err := t.client.EventService().Subscribe(cancellable, &eventsapi.SubscribeRequest{
+		Filters: []string{"topic==" + runtime.TaskExitEventTopic},
+	})
 	if err != nil {
 		return UnknownExitStatus, errdefs.FromGRPC(err)
+	}
+	t.mu.Lock()
+	checkpoint := t.deferred != nil
+	t.mu.Unlock()
+	if !checkpoint {
+		// first check if the task has exited
+		status, err := t.Status(ctx)
+		if err != nil {
+			return UnknownExitStatus, errdefs.FromGRPC(err)
+		}
+		if status.Status == Stopped {
+			return status.ExitStatus, nil
+		}
 	}
 	for {
 		evt, err := eventstream.Recv()
@@ -209,6 +257,25 @@ func (t *task) Exec(ctx context.Context, id string, spec *specs.Process, ioCreat
 	}
 	i, err := ioCreate(id)
 	if err != nil {
+		return nil, err
+	}
+	any, err := typeurl.MarshalAny(spec)
+	if err != nil {
+		return nil, err
+	}
+	request := &tasks.ExecProcessRequest{
+		ContainerID: t.id,
+		ExecID:      id,
+		Terminal:    i.Terminal,
+		Stdin:       i.Stdin,
+		Stdout:      i.Stdout,
+		Stderr:      i.Stderr,
+		Spec:        any,
+	}
+	if _, err := t.client.TaskService().Exec(ctx, request); err != nil {
+		i.Cancel()
+		i.Wait()
+		i.Close()
 		return nil, err
 	}
 	return &process{
@@ -297,10 +364,13 @@ func (t *task) Checkpoint(ctx context.Context, opts ...CheckpointTaskOpts) (d v1
 	return t.writeIndex(ctx, &index)
 }
 
+// UpdateTaskInfo allows updated specific settings to be changed on a task
 type UpdateTaskInfo struct {
+	// Resources updates a tasks resource constraints
 	Resources interface{}
 }
 
+// UpdateTaskOpts allows a caller to update task settings
 type UpdateTaskOpts func(context.Context, *Client, *UpdateTaskInfo) error
 
 func (t *task) Update(ctx context.Context, opts ...UpdateTaskOpts) error {
@@ -395,11 +465,4 @@ func writeContent(ctx context.Context, store content.Store, mediaType, ref strin
 		Digest:    writer.Digest(),
 		Size:      size,
 	}, nil
-}
-
-func WithExit(r *CheckpointTaskInfo) error {
-	r.Options = &runcopts.CheckpointOptions{
-		Exit: true,
-	}
-	return nil
 }
