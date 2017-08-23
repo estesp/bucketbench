@@ -347,21 +347,20 @@ func stopTask(ctx context.Context, ctr containerd.Container) error {
 			return err
 		}
 	case containerd.Running:
-		statusC := make(chan uint32, 1)
-		go func() {
-			status, err := task.Wait(ctx)
-			if err != nil {
-				log.Errorf("container %q: error during wait: %v", ctr.ID(), err)
-			}
-			statusC <- status
-		}()
-		err := task.Kill(ctx, syscall.SIGKILL)
+		statusC, err := task.Wait(ctx)
 		if err != nil {
+			log.Errorf("container %q: error during wait: %v", ctr.ID(), err)
+		}
+		if err := task.Kill(ctx, syscall.SIGKILL); err != nil {
 			task.Delete(ctx)
 			return err
 		}
 		status := <-statusC
-		if status != 0 {
+		code, _, err := status.Result()
+		if err != nil {
+			log.Errorf("container %q: error getting task result code: %v", ctr.ID(), err)
+		}
+		if code != 0 {
 			log.Debugf("%s: exited container process: code: %d", ctr.ID(), status)
 		}
 		_, err = task.Delete(ctx)

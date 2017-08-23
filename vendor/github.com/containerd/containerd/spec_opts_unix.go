@@ -6,11 +6,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/containerd/containerd/containers"
+	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/typeurl"
 	"github.com/opencontainers/image-spec/identity"
 	"github.com/opencontainers/image-spec/specs-go/v1"
@@ -73,15 +76,14 @@ func WithImageConfig(ctx context.Context, i Image) SpecOpts {
 		)
 		switch ic.MediaType {
 		case v1.MediaTypeImageConfig, images.MediaTypeDockerSchema2Config:
-			r, err := store.Reader(ctx, ic.Digest)
+			p, err := content.ReadBlob(ctx, store, ic.Digest)
 			if err != nil {
 				return err
 			}
-			if err := json.NewDecoder(r).Decode(&ociimage); err != nil {
-				r.Close()
+
+			if err := json.Unmarshal(p, &ociimage); err != nil {
 				return err
 			}
-			r.Close()
 			config = ociimage.Config
 		default:
 			return fmt.Errorf("unknown image config media type %s", ic.MediaType)
@@ -174,8 +176,8 @@ func WithHostHostsFile(s *specs.Spec) error {
 	return nil
 }
 
-// WithHostResoveconf bind-mounts the host's /etc/resolv.conf into the container as readonly
-func WithHostResoveconf(s *specs.Spec) error {
+// WithHostResolvconf bind-mounts the host's /etc/resolv.conf into the container as readonly
+func WithHostResolvconf(s *specs.Spec) error {
 	s.Mounts = append(s.Mounts, specs.Mount{
 		Destination: "/etc/resolv.conf",
 		Type:        "bind",
@@ -231,6 +233,9 @@ func WithRemappedSnapshot(id string, i Image, uid, gid uint32) NewContainerOpts 
 		if err != nil {
 			return err
 		}
+
+		setSnapshotterIfEmpty(c)
+
 		var (
 			snapshotter = client.SnapshotService(c.Snapshotter)
 			parent      = identity.ChainID(diffIDs).String()
@@ -260,6 +265,27 @@ func WithRemappedSnapshot(id string, i Image, uid, gid uint32) NewContainerOpts 
 		}
 		c.RootFS = id
 		c.Image = i.Name()
+		return nil
+	}
+}
+
+// WithCgroup sets the container's cgroup path
+func WithCgroup(path string) SpecOpts {
+	return func(s *specs.Spec) error {
+		s.Linux.CgroupsPath = path
+		return nil
+	}
+}
+
+// WithNamespacedCgroup uses the namespace set on the context to create a
+// root directory for containers in the cgroup with the id as the subcgroup
+func WithNamespacedCgroup(ctx context.Context, id string) SpecOpts {
+	return func(s *specs.Spec) error {
+		namespace, err := namespaces.NamespaceRequired(ctx)
+		if err != nil {
+			return err
+		}
+		s.Linux.CgroupsPath = filepath.Join("/", namespace, id)
 		return nil
 	}
 }

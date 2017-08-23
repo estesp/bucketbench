@@ -38,19 +38,18 @@ var (
 	bucketKeyObjectBlob       = []byte("blob")       // stores content links
 	bucketKeyObjectIngest     = []byte("ingest")     // stores ingest links
 
-	bucketKeyDigest    = []byte("digest")
-	bucketKeyMediaType = []byte("mediatype")
-	bucketKeySize      = []byte("size")
-	bucketKeyLabels    = []byte("labels")
-	bucketKeyImage     = []byte("image")
-	bucketKeyRuntime   = []byte("runtime")
-	bucketKeyName      = []byte("name")
-	bucketKeyOptions   = []byte("options")
-	bucketKeySpec      = []byte("spec")
-	bucketKeyRootFS    = []byte("rootfs")
-	bucketKeyTarget    = []byte("target")
-	bucketKeyCreatedAt = []byte("createdat")
-	bucketKeyUpdatedAt = []byte("updatedat")
+	bucketKeyDigest      = []byte("digest")
+	bucketKeyMediaType   = []byte("mediatype")
+	bucketKeySize        = []byte("size")
+	bucketKeyImage       = []byte("image")
+	bucketKeyRuntime     = []byte("runtime")
+	bucketKeyName        = []byte("name")
+	bucketKeyParent      = []byte("parent")
+	bucketKeyOptions     = []byte("options")
+	bucketKeySpec        = []byte("spec")
+	bucketKeyRootFS      = []byte("rootfs")
+	bucketKeySnapshotter = []byte("snapshotter")
+	bucketKeyTarget      = []byte("target")
 )
 
 func getBucket(tx *bolt.Tx, keys ...[]byte) *bolt.Bucket {
