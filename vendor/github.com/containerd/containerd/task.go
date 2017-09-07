@@ -116,13 +116,20 @@ type Task interface {
 	Checkpoint(context.Context, ...CheckpointTaskOpts) (v1.Descriptor, error)
 	// Update modifies executing tasks with updated settings
 	Update(context.Context, ...UpdateTaskOpts) error
+	// LoadProcess loads a previously created exec'd process
+	LoadProcess(context.Context, string, IOAttach) (Process, error)
+	// Metrics returns task metrics for runtime specific metrics
+	//
+	// The metric types are generic to containerd and change depending on the runtime
+	// For the built in Linux runtime, github.com/containerd/cgroups.Metrics
+	// are returned in protobuf format
+	Metrics(context.Context) (*types.Metric, error)
 }
 
 var _ = (Task)(&task{})
 
 type task struct {
-	client    *Client
-	container Container
+	client *Client
 
 	io  IO
 	id  string
@@ -162,10 +169,17 @@ func (t *task) Start(ctx context.Context) error {
 	return errdefs.FromGRPC(err)
 }
 
-func (t *task) Kill(ctx context.Context, s syscall.Signal) error {
+func (t *task) Kill(ctx context.Context, s syscall.Signal, opts ...KillOpts) error {
+	var i KillInfo
+	for _, o := range opts {
+		if err := o(ctx, t, &i); err != nil {
+			return err
+		}
+	}
 	_, err := t.client.TaskService().Kill(ctx, &tasks.KillRequest{
 		Signal:      uint32(s),
 		ContainerID: t.id,
+		All:         i.All,
 	})
 	if err != nil {
 		return errdefs.FromGRPC(err)
@@ -261,15 +275,15 @@ func (t *task) Wait(ctx context.Context) (<-chan ExitStatus, error) {
 // Delete deletes the task and its runtime state
 // it returns the exit status of the task and any errors that were encountered
 // during cleanup
-func (t *task) Delete(ctx context.Context, opts ...ProcessDeleteOpts) (uint32, error) {
+func (t *task) Delete(ctx context.Context, opts ...ProcessDeleteOpts) (*ExitStatus, error) {
 	for _, o := range opts {
 		if err := o(ctx, t); err != nil {
-			return UnknownExitStatus, err
+			return nil, err
 		}
 	}
 	status, err := t.Status(ctx)
 	if err != nil && errdefs.IsNotFound(err) {
-		return UnknownExitStatus, err
+		return nil, err
 	}
 	switch status.Status {
 	case Stopped, Unknown, "":
@@ -280,7 +294,7 @@ func (t *task) Delete(ctx context.Context, opts ...ProcessDeleteOpts) (uint32, e
 		}
 		fallthrough
 	default:
-		return UnknownExitStatus, errors.Wrapf(errdefs.ErrFailedPrecondition, "task must be stopped before deletion: %s", status.Status)
+		return nil, errors.Wrapf(errdefs.ErrFailedPrecondition, "task must be stopped before deletion: %s", status.Status)
 	}
 	if t.io != nil {
 		t.io.Cancel()
@@ -291,9 +305,9 @@ func (t *task) Delete(ctx context.Context, opts ...ProcessDeleteOpts) (uint32, e
 		ContainerID: t.id,
 	})
 	if err != nil {
-		return UnknownExitStatus, errdefs.FromGRPC(err)
+		return nil, errdefs.FromGRPC(err)
 	}
-	return r.ExitStatus, nil
+	return &ExitStatus{code: r.ExitStatus, exitedAt: r.ExitedAt}, nil
 }
 
 func (t *task) Exec(ctx context.Context, id string, spec *specs.Process, ioCreate IOCreation) (Process, error) {
@@ -328,7 +342,6 @@ func (t *task) Exec(ctx context.Context, id string, spec *specs.Process, ioCreat
 		id:   id,
 		task: t,
 		io:   i,
-		spec: spec,
 	}, nil
 }
 
@@ -402,7 +415,7 @@ func (t *task) Checkpoint(ctx context.Context, opts ...CheckpointTaskOpts) (d v1
 	if err := t.checkpointImage(ctx, &index, cr.Image); err != nil {
 		return d, err
 	}
-	if err := t.checkpointRWSnapshot(ctx, &index, cr.Snapshotter, cr.RootFS); err != nil {
+	if err := t.checkpointRWSnapshot(ctx, &index, cr.Snapshotter, cr.SnapshotKey); err != nil {
 		return d, err
 	}
 	index.Annotations = make(map[string]string)
@@ -438,6 +451,43 @@ func (t *task) Update(ctx context.Context, opts ...UpdateTaskOpts) error {
 	}
 	_, err := t.client.TaskService().Update(ctx, request)
 	return errdefs.FromGRPC(err)
+}
+
+func (t *task) LoadProcess(ctx context.Context, id string, ioAttach IOAttach) (Process, error) {
+	response, err := t.client.TaskService().Get(ctx, &tasks.GetRequest{
+		ContainerID: t.id,
+		ExecID:      id,
+	})
+	if err != nil {
+		err = errdefs.FromGRPC(err)
+		if errdefs.IsNotFound(err) {
+			return nil, errors.Wrapf(err, "no running process found")
+		}
+		return nil, err
+	}
+	var i IO
+	if ioAttach != nil {
+		if i, err = attachExistingIO(response, ioAttach); err != nil {
+			return nil, err
+		}
+	}
+	return &process{
+		id:   id,
+		task: t,
+		io:   i,
+	}, nil
+}
+
+func (t *task) Metrics(ctx context.Context) (*types.Metric, error) {
+	response, err := t.client.TaskService().Metrics(ctx, &tasks.MetricsRequest{
+		Filters: []string{
+			"id==" + t.id,
+		},
+	})
+	if err != nil {
+		return nil, errdefs.FromGRPC(err)
+	}
+	return response.Metrics[0], nil
 }
 
 func (t *task) checkpointTask(ctx context.Context, index *v1.Index, request *tasks.CheckpointTaskRequest) error {
@@ -503,7 +553,7 @@ func writeContent(ctx context.Context, store content.Store, mediaType, ref strin
 	if err != nil {
 		return d, err
 	}
-	if err := writer.Commit(size, ""); err != nil {
+	if err := writer.Commit(ctx, size, ""); err != nil {
 		return d, err
 	}
 	return v1.Descriptor{
