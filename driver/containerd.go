@@ -10,7 +10,6 @@ import (
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/namespaces"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -186,21 +185,18 @@ func (r *ContainerdDriver) Run(ctr Container) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	var spec *specs.Spec
+	var container containerd.Container
 	if ctr.Command() != "" {
 		// the command needs to be overridden in the generated spec
-		spec, err = containerd.GenerateSpec(containerd.WithImageConfig(r.context, image),
-			containerd.WithProcessArgs(strings.Split(ctr.Command(), " ")...))
+		container, err = r.client.NewContainer(r.context, ctr.Name(),
+			containerd.WithNewSpec(containerd.WithImageConfig(image),
+				containerd.WithProcessArgs(strings.Split(ctr.Command(), " ")...)),
+			containerd.WithNewSnapshot(ctr.Name(), image))
 	} else {
-		spec, err = containerd.GenerateSpec(containerd.WithImageConfig(r.context, image))
+		container, err = r.client.NewContainer(r.context, ctr.Name(),
+			containerd.WithNewSpec(containerd.WithImageConfig(image)),
+			containerd.WithNewSnapshot(ctr.Name(), image))
 	}
-	if err != nil {
-		return "", 0, err
-	}
-	container, err := r.client.NewContainer(r.context, ctr.Name(),
-		containerd.WithSpec(spec),
-		containerd.WithImage(image),
-		containerd.WithNewSnapshot(ctr.Name(), image))
 	if err != nil {
 		return "", 0, err
 	}
@@ -229,7 +225,7 @@ func (r *ContainerdDriver) Stop(ctr Container) (string, int, error) {
 	}
 	if err = stopTask(r.context, container); err != nil {
 		// ignore if the error is that the process had already exited:
-		if !strings.Contains(err.Error(), "process already finished") {
+		if !strings.Contains(err.Error(), "not found") {
 			return "", 0, err
 		}
 	}
