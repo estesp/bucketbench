@@ -114,10 +114,7 @@ func (r *ContainerdDriver) Path() string {
 // Close allows the driver to handle any resource free/connection closing
 // as necessary.
 func (r *ContainerdDriver) Close() error {
-	if err := r.client.Close(); err != nil {
-		return err
-	}
-	return nil
+	return r.client.Close()
 }
 
 // Info returns
