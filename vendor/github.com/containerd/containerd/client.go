@@ -23,6 +23,7 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/plugin"
 	"github.com/containerd/containerd/reference"
 	"github.com/containerd/containerd/remotes"
@@ -34,7 +35,7 @@ import (
 	imagesservice "github.com/containerd/containerd/services/images"
 	snapshotservice "github.com/containerd/containerd/services/snapshot"
 	"github.com/containerd/containerd/snapshot"
-	"github.com/containerd/containerd/typeurl"
+	"github.com/containerd/typeurl"
 	pempty "github.com/golang/protobuf/ptypes/empty"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -44,12 +45,13 @@ import (
 )
 
 func init() {
+	const prefix = "types.containerd.io"
 	// register TypeUrls for commonly marshaled external types
 	major := strconv.Itoa(specs.VersionMajor)
-	typeurl.Register(&specs.Spec{}, "opencontainers/runtime-spec", major, "Spec")
-	typeurl.Register(&specs.Process{}, "opencontainers/runtime-spec", major, "Process")
-	typeurl.Register(&specs.LinuxResources{}, "opencontainers/runtime-spec", major, "LinuxResources")
-	typeurl.Register(&specs.WindowsResources{}, "opencontainers/runtime-spec", major, "WindowsResources")
+	typeurl.Register(&specs.Spec{}, prefix, "opencontainers/runtime-spec", major, "Spec")
+	typeurl.Register(&specs.Process{}, prefix, "opencontainers/runtime-spec", major, "Process")
+	typeurl.Register(&specs.LinuxResources{}, prefix, "opencontainers/runtime-spec", major, "LinuxResources")
+	typeurl.Register(&specs.WindowsResources{}, prefix, "opencontainers/runtime-spec", major, "WindowsResources")
 }
 
 // New returns a new containerd client that is connected to the containerd
@@ -225,7 +227,7 @@ func (c *Client) Pull(ctx context.Context, ref string, opts ...RemoteOpts) (Imag
 	} else {
 		handler = images.Handlers(append(pullCtx.BaseHandlers,
 			remotes.FetchHandler(store, fetcher),
-			images.ChildrenHandler(store))...,
+			images.ChildrenHandler(store, platforms.Default()))...,
 		)
 	}
 
@@ -306,7 +308,7 @@ func (c *Client) Push(ctx context.Context, ref string, desc ocispec.Descriptor, 
 	pushHandler := remotes.PushHandler(cs, pusher)
 
 	handlers := append(pushCtx.BaseHandlers,
-		images.ChildrenHandler(cs),
+		images.ChildrenHandler(cs, platforms.Default()),
 		filterHandler,
 		pushHandler,
 	)
