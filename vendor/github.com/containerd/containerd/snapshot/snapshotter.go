@@ -146,7 +146,7 @@ func (u *Usage) Add(other Usage) {
 // the active snapshot. Mount this to the temporary location with the
 // following:
 //
-//	if err := containerd.MountAll(mounts, tmpDir); err != nil { ... }
+//	if err := mount.All(mounts, tmpDir); err != nil { ... }
 //
 // Once the mounts are performed, our temporary location is ready to capture
 // a diff. In practice, this works similar to a filesystem transaction. The
@@ -213,7 +213,7 @@ type Snapshotter interface {
 	// the kind of snapshot.
 	Stat(ctx context.Context, key string) (Info, error)
 
-	// Update updates the infor for a snapshot.
+	// Update updates the info for a snapshot.
 	//
 	// Only mutable properties of a snapshot may be updated.
 	Update(ctx context.Context, info Info, fieldpaths ...string) (Info, error)
