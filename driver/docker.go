@@ -82,6 +82,12 @@ func (c *DockerContainer) Command() string {
 	return c.cmdOverride
 }
 
+//GetPodID return pod-id associated with container.
+//only used by CRI-based drivers
+func (c *DockerContainer) GetPodID() string {
+	return ""
+}
+
 // Type returns a driver.Type to indentify the driver implementation
 func (d *DockerDriver) Type() Type {
 	return Docker

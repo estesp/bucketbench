@@ -141,7 +141,7 @@ func runBenchmark(driverConfig benches.DriverConfig, benchmark benches.Benchmark
 			}
 			imageInfo = benchmark.RootFs
 		}
-		err := bench.Init(benchmark.Name, driverType, driverConfig.Binary, imageInfo, benchmark.Command, trace)
+		err := bench.Init(benchmark.Name, driverType, driverConfig.ClientPath, imageInfo, benchmark.Command, trace)
 		if err != nil {
 			return benchResult{}, err
 		}

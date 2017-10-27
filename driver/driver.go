@@ -16,6 +16,8 @@ const (
 	// Ctr represents the containerd legacy driver using the `ctr`
 	// binary to drive containerd operations
 	Ctr
+	//CRI driver represents k8s Container Runtime Interface
+	CRI
 	// Null driver represents an empty driver for use by benchmarks that
 	// require no driver
 	Null
@@ -40,6 +42,10 @@ type Container interface {
 	// Command returns an optional command that overrides the default image
 	// "CMD" or "ENTRYPOINT" for the Docker and Containerd (gRPC) drivers
 	Command() string
+
+	//GetPodID returns podid associated with the container
+	//only used by CRI-based drivers
+	GetPodID() string
 }
 
 // Driver is an interface for various container engines. The integer returned from
@@ -93,6 +99,8 @@ func New(dtype Type, path string) (Driver, error) {
 		return NewContainerdDriver(path)
 	case Ctr:
 		return NewCtrDriver(path)
+	case CRI:
+		return NewCRIDriver(path)
 	case Null:
 		return nil, nil
 	default:
@@ -112,6 +120,8 @@ func TypeToString(dtype Type) string {
 		driverType = "Ctr"
 	case Runc:
 		driverType = "Runc"
+	case CRI:
+		driverType = "CRI"
 	default:
 		driverType = "(unknown)"
 	}
@@ -130,6 +140,8 @@ func StringToType(dtype string) Type {
 		driverType = Ctr
 	case "Runc":
 		driverType = Runc
+	case "CRI":
+		driverType = CRI
 	default:
 		driverType = Null
 	}
