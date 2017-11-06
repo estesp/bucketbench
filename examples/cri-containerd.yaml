@@ -1,0 +1,13 @@
+name: CRIContainerd
+image: alpine
+detached: true
+drivers:
+  - 
+   type: CRI
+   threads: 5
+   iterations: 1
+   clientpath: /var/run/cri-containerd.sock
+commands:
+  - run
+  - stop
+  - delete

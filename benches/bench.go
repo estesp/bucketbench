@@ -37,7 +37,7 @@ type Benchmark struct {
 // benchmark against a specific driver type
 type DriverConfig struct {
 	Type       string
-	Binary     string //optional path to specific client binary
+	ClientPath string //optional path to specific client binary/socket
 	Threads    int
 	Iterations int
 }

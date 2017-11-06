@@ -90,6 +90,12 @@ func (c *CtrContainer) Detached() bool {
 	return true
 }
 
+//GetPodID return pod-id associated with container.
+//only used by CRI-based drivers
+func (c *CtrContainer) GetPodID() string {
+	return ""
+}
+
 // Type returns a driver.Type to indentify the driver implementation
 func (r *CtrDriver) Type() Type {
 	return Ctr
