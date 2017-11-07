@@ -92,7 +92,7 @@ against each engine.
 
 Each driver has the following settings:
  - **type**: One of the four implemented drivers: `Runc`, `Docker`, `Containerd`, `Ctr`
- - **binary**: *[Optional]* Path to the binary (or in the case of containerd 1.0, UNIX socket path of the gRPC server) in case you want to use a custom binary. By default the standard binaries are used as found in the current `$PATH`
+ - **clientpath**: *[Optional]* Path to the binary for client executable based drivers. In the case of containerd 1.0 and the CRI driver, this will be the unique UNIX socket path of the gRPC server. For client binary-based drivers, the driver will default to the standard binary name found in the current `$PATH`
  - **threads**: Integer number of concurrent threads to run. The `bucketbench` method is to execute 1..n runs, where `n` is the number of threads and each run adds another concurrent thread. **Run 1** only has one thread and **Run N** will have `n` concurrent threads.
  - **iterations**: Number of containers to create in each thread and execute the listed commands against.
 
@@ -150,5 +150,4 @@ should work as well.
 
 ## TODOs
 
- - UX/access to detailed statistics gathered (and currently unused) for each operation's metrics
  - Decide what to do with the `-trace` flag, which was only useful with a private build of `runc` which generated Go pprof traces. Possibly submit trace support to upstream runc.
