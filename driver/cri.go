@@ -152,12 +152,16 @@ func (c *CRIDriver) Path() string {
 // Create will create a container instance matching the specific needs
 // of a driver
 func (c *CRIDriver) Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
-
-	if _, err := (*c.imageClient).PullImage(c.context, &pb.PullImageRequest{Image: &pb.ImageSpec{Image: image}}); err != nil {
-		return nil, err
+	if status, err := (*c.imageClient).ImageStatus(c.context, &pb.ImageStatusRequest{Image: &pb.ImageSpec{Image: image}}); err != nil || status.Image == nil {
+		if _, err := (*c.imageClient).PullImage(c.context, &pb.PullImageRequest{Image: &pb.ImageSpec{Image: image}}); err != nil {
+			return nil, err
+		}
 	}
-	if _, err := (*c.imageClient).PullImage(c.context, &pb.PullImageRequest{Image: &pb.ImageSpec{Image: defaultPodImage}}); err != nil {
-		return nil, err
+
+	if status, err := (*c.imageClient).ImageStatus(c.context, &pb.ImageStatusRequest{Image: &pb.ImageSpec{Image: defaultPodImage}}); err != nil || status.Image == nil {
+		if _, err := (*c.imageClient).PullImage(c.context, &pb.PullImageRequest{Image: &pb.ImageSpec{Image: defaultPodImage}}); err != nil {
+			return nil, err
+		}
 	}
 
 	pconfig := pconfigGlobal
