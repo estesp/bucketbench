@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/containerd/oci"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -192,12 +194,12 @@ func (r *ContainerdDriver) Run(ctr Container) (string, int, error) {
 	if ctr.Command() != "" {
 		// the command needs to be overridden in the generated spec
 		container, err = r.client.NewContainer(r.context, ctr.Name(),
-			containerd.WithNewSpec(containerd.WithImageConfig(image),
-				containerd.WithProcessArgs(strings.Split(ctr.Command(), " ")...)),
+			containerd.WithNewSpec(oci.WithImageConfig(image),
+				oci.WithProcessArgs(strings.Split(ctr.Command(), " ")...)),
 			containerd.WithNewSnapshot(ctr.Name(), image))
 	} else {
 		container, err = r.client.NewContainer(r.context, ctr.Name(),
-			containerd.WithNewSpec(containerd.WithImageConfig(image)),
+			containerd.WithNewSpec(oci.WithImageConfig(image)),
 			containerd.WithNewSnapshot(ctr.Name(), image))
 	}
 	if err != nil {
@@ -205,7 +207,7 @@ func (r *ContainerdDriver) Run(ctr Container) (string, int, error) {
 	}
 
 	stdouterr := bytes.NewBuffer(nil)
-	task, err := container.NewTask(r.context, containerd.NewIO(bytes.NewBuffer(nil), stdouterr, stdouterr))
+	task, err := container.NewTask(r.context, cio.NewIO(bytes.NewBuffer(nil), stdouterr, stdouterr))
 	if err != nil {
 		return "", 0, err
 	}

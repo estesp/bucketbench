@@ -15,6 +15,28 @@ containerd is designed to be embedded into a larger system, rather than being us
 
 If you are interested in trying out containerd please see our [Getting Started Guide](docs/getting-started.md).
 
+## Runtime Requirements
+
+Runtime requirements for containerd are very minimal. Most interactions with
+the Linux and Windows container feature sets are handled via [runc](https://github.com/opencontainers/runc) and/or
+OS-specific libraries (e.g. [hcsshim](https://github.com/Microsoft/hcsshim) for Microsoft). There are specific features
+used by containerd core code and snapshotters that will require a minimum kernel
+version on Linux. With the understood caveat of distro kernel versioning, a
+reasonable starting point for Linux is a minimum 4.x kernel version.
+
+The overlay filesystem snapshotter, used by default, uses features that were
+finalized in the 4.x kernel series. If you choose to use btrfs, there may
+be more flexibility in kernel version (minimum recommended is 3.13), but will
+require the btrfs kernel module and btrfs tools to be installed on your Linux
+distribution.
+
+To use Linux checkpoint and restore features, you will need `criu` installed on
+your system. See more details in [Checkpoint and Restore](#checkpoint-and-restore).
+
+The current required version of runc is always listed in [RUNC.md](/RUNC.md).
+
+Build requirements for developers are listed in the [Developer Quick-Start](#developer-quick-start) section.
+
 ## Features
 
 ### Client
@@ -78,7 +100,7 @@ containerd fully supports the OCI runtime specification for running containers. 
 You can specify options when creating a container about how to modify the specification.
 
 ```go
-redis, err := client.NewContainer(context, "redis-master", containerd.WithNewSpec(containerd.WithImageConfig(image)))
+redis, err := client.NewContainer(context, "redis-master", containerd.WithNewSpec(oci.WithImageConfig(image)))
 ```
 
 ### Root Filesystems
@@ -92,8 +114,7 @@ image, err := client.Pull(context, "docker.io/library/redis:latest", containerd.
 // allocate a new RW root filesystem for a container based on the image
 redis, err := client.NewContainer(context, "redis-master",
 	containerd.WithNewSnapshot("redis-rootfs", image),
-	containerd.WithNewSpec(containerd.WithImageConfig(image)),
-
+	containerd.WithNewSpec(oci.WithImageConfig(image)),
 )
 
 // use a readonly filesystem with multiple containers
@@ -101,7 +122,7 @@ for i := 0; i < 10; i++ {
 	id := fmt.Sprintf("id-%s", i)
 	container, err := client.NewContainer(ctx, id,
 		containerd.WithNewSnapshotView(id, image),
-		containerd.WithNewSpec(containerd.WithImageConfig(image)),
+		containerd.WithNewSpec(oci.WithImageConfig(image)),
 	)
 }
 ```
@@ -150,7 +171,7 @@ defer task.Delete(context)
 err := task.Start(context)
 ```
 
-## Developer Quick-Start
+## Developer Quick Start
 
 To build the daemon and `ctr` simple test client, the following build system dependencies are required:
 
@@ -158,11 +179,11 @@ To build the daemon and `ctr` simple test client, the following build system dep
 * Protoc 3.x compiler and headers (download at the [Google protobuf releases page](https://github.com/google/protobuf/releases))
 * Btrfs headers and libraries for your distribution. Note that building the btrfs driver can be disabled via build tag removing this dependency.
 
-For proper results, install the `protoc` release into `/usr/local` on your build system. For example, the following commands will download and install the 3.1.0 release for a 64-bit Linux host:
+For proper results, install the `protoc` release into `/usr/local` on your build system. For example, the following commands will download and install the 3.5.0 release for a 64-bit Linux host:
 
 ```
-$ wget -c https://github.com/google/protobuf/releases/download/v3.1.0/protoc-3.1.0-linux-x86_64.zip
-$ sudo unzip protoc-3.1.0-linux-x86_64.zip -d /usr/local
+$ wget -c https://github.com/google/protobuf/releases/download/v3.5.0/protoc-3.5.0-linux-x86_64.zip
+$ sudo unzip protoc-3.5.0-linux-x86_64.zip -d /usr/local
 ```
 
 With the required dependencies installed, the `Makefile` target named **binaries** will compile the `ctr` and `containerd` binaries and place them in the `bin/` directory. Using `sudo make install` will place the binaries in `/usr/local/bin`. When making any changes to the gRPC API, `make generate` will use the installed `protoc` compiler to regenerate the API generated code packages.
