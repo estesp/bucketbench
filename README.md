@@ -144,9 +144,13 @@ It will most likely build for other platforms, and if run against a tool like
 Docker for Mac, would probably work against the Docker engine, but not
 against `containerd` or `runc`.
 
-All the necessary dependencies are vendored into the `bucketbench` tree, so
-building should be as easy as `go build -o bucketbench .` Using `go install github.com/estesp/bucketbench`
-should work as well.
+All the necessary dependencies are vendored into the `bucketbench` source tree.
+Building `bucketbench` only requires that you have a valid Golang build/runtime
+environment. Any recent release of Go will work, but it is currently building
+with Go 1.9.x and 1.10. A simple `Makefile` is available to simplify building
+bucketbench as a dynamic or static binary. `make binary` will build the
+`bucketbench` binary and `make install` will place it in your `$PATH`. You
+should also be able to simply `go install github.com/estesp/bucketbench`.
 
 ## TODOs
 
