@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -301,6 +302,14 @@ func (c *CRIDriver) Unpause(ctr Container) (string, int, error) {
 // connections
 func (c *CRIDriver) Close() error {
 	return nil
+}
+
+func (c *CRIDriver) PID() (int, error) {
+	return 0, errors.New("not implemented")
+}
+
+func (c *CRIDriver) Wait(ctr Container) (string, int, error) {
+	return "", 0, errors.New("not implemented")
 }
 
 func openFile(path string) (*os.File, error) {

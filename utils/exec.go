@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 // ResolveBinary finds a binary name along the path and evaluates any symlinks
@@ -33,7 +35,7 @@ func ExecTimedCmdNoOut(cmd, args string) (string, int, error) {
 	err := execCmd.Run()
 	elapsed := time.Since(start)
 	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-	return "", msElapsed, err
+	return "", msElapsed, errors.Wrapf(err, "exec failed: %s %s", cmd, args)
 }
 
 // ExecTimedCmd executes a command and returns the combined err/out output and any errors
@@ -44,14 +46,14 @@ func ExecTimedCmd(cmd, args string) (string, int, error) {
 	out, err := execCmd.CombinedOutput()
 	elapsed := time.Since(start)
 	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-	return string(out), msElapsed, err
+	return string(out), msElapsed, errors.Wrapf(err, "exec failed: %s %s", cmd, args)
 }
 
 // ExecCmd executes a command and returns the combined err/out output and any errors
 func ExecCmd(cmd, args string) (string, error) {
 	execCmd := exec.Command(cmd, strings.Split(args, " ")...)
 	out, err := execCmd.CombinedOutput()
-	return string(out), err
+	return string(out), errors.Wrapf(err, "exec failed: %s %s", cmd, args)
 }
 
 // ExecShellCmd executes a 'bash -c' process, with the passed-in command
@@ -59,5 +61,5 @@ func ExecCmd(cmd, args string) (string, error) {
 func ExecShellCmd(cmd string) (string, error) {
 	execCmd := exec.Command("bash", "-c", cmd)
 	out, err := execCmd.CombinedOutput()
-	return string(out), err
+	return string(out), errors.Wrapf(err, "exec failed: %s", cmd)
 }

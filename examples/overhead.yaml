@@ -1,0 +1,19 @@
+name: OverheadBench
+image: mxpv/stress
+entrypoint: stress
+command: --cpu 1 --io 1 --vm 1 --vm-bytes 128M --timeout 10s
+rootfs: /tmp/overhead_bench/
+detached: true
+drivers:
+- type: Containerd
+  threads: 4
+  iterations: 3
+- type: Docker
+  threads: 4
+  iterations: 3
+commands:
+- run
+- pause
+- resume
+- wait
+- remove

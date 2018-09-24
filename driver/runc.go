@@ -2,6 +2,7 @@ package driver
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -111,6 +112,15 @@ func (r *RuncDriver) Path() string {
 // as necessary. Runc has no need to perform any actions on close.
 func (r *RuncDriver) Close() error {
 	return nil
+}
+
+func (r *RuncDriver) PID() (int, error) {
+	return 0, errors.New("not implemented")
+}
+
+// Wait will block until container stop
+func (r *RuncDriver) Wait(ctr Container) (string, int, error) {
+	return "", 0, errors.New("not implemented")
 }
 
 // Info returns

@@ -16,7 +16,7 @@ const (
 	// Ctr represents the containerd legacy driver using the `ctr`
 	// binary to drive containerd operations
 	Ctr
-	//CRI driver represents k8s Container Runtime Interface
+	// CRI driver represents k8s Container Runtime Interface
 	CRI
 	// Null driver represents an empty driver for use by benchmarks that
 	// require no driver
@@ -83,9 +83,15 @@ type Driver interface {
 	// Unpause will unpause/resume a container
 	Unpause(ctr Container) (string, int, error)
 
+	// Wait blocks thread until container stop
+	Wait(ctr Container) (string, int, error)
+
 	// Close allows the driver to free any resources/close any
 	// connections
 	Close() error
+
+	// PID returns daemon process id
+	PID() (int, error)
 }
 
 // New creates a driver instance of a specific type
@@ -104,7 +110,7 @@ func New(dtype Type, path string) (Driver, error) {
 	case Null:
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("No such driver type: %v", dtype)
+		return nil, fmt.Errorf("no such driver type: %v", dtype)
 	}
 }
 

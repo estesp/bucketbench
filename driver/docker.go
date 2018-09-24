@@ -3,9 +3,12 @@ package driver
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
+	"strconv"
 	"strings"
 
 	"github.com/estesp/bucketbench/utils"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -104,6 +107,20 @@ func (d *DockerDriver) Close() error {
 	return nil
 }
 
+func (d *DockerDriver) PID() (int, error) {
+	buf, err := ioutil.ReadFile("/var/run/docker.pid")
+	if err != nil {
+		return 0, errors.Wrap(err, "could not read Docker pid file")
+	}
+
+	return strconv.Atoi(string(buf))
+}
+
+// Wait will block until container stop
+func (d *DockerDriver) Wait(ctr Container) (string, int, error) {
+	return utils.ExecTimedCmd(d.dockerBinary, "wait "+ctr.Name())
+}
+
 // Info returns
 func (d *DockerDriver) Info() (string, error) {
 	if d.dockerInfo != "" {
@@ -154,12 +171,19 @@ func (d *DockerDriver) Clean() error {
 
 // Run will execute a container using the driver
 func (d *DockerDriver) Run(ctr Container) (string, int, error) {
-	var detached string
+	args := []string{"run"}
+
 	if ctr.Detached() {
-		detached = "-d"
+		args = append(args, "-d")
 	}
-	args := fmt.Sprintf("run %s --name %s %s", detached, ctr.Name(), ctr.Image())
-	return utils.ExecTimedCmd(d.dockerBinary, args)
+
+	args = append(args, "--name", ctr.Name(), ctr.Image())
+
+	if ctr.Command() != "" {
+		args = append(args, ctr.Command())
+	}
+	
+	return utils.ExecTimedCmd(d.dockerBinary, strings.Join(args, " "))
 }
 
 // Stop will stop/kill a container

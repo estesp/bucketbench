@@ -2,6 +2,7 @@ package driver
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -110,6 +111,14 @@ func (r *CtrDriver) Path() string {
 // as necessary. Ctr has no need to perform any actions on close.
 func (r *CtrDriver) Close() error {
 	return nil
+}
+
+func (r *CtrDriver) PID() (int, error) {
+	return 0, errors.New("not implemented")
+}
+
+func (r *CtrDriver) Wait(ctr Container) (string, int, error) {
+	return "", 0, errors.New("not implemented")
 }
 
 // Info returns

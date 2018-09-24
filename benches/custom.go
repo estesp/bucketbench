@@ -136,6 +136,7 @@ func (cb *CustomBench) runThread(driver driver.Driver, threadNum, iterations int
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations["run"] = runElapsed
+				log.Debug(out)
 			case "stop", "kill":
 				out, stopElapsed, err := driver.Stop(ctr)
 				if err != nil {
@@ -143,6 +144,7 @@ func (cb *CustomBench) runThread(driver driver.Driver, threadNum, iterations int
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations["stop"] = stopElapsed
+				log.Debug(out)
 			case "remove", "erase", "delete":
 				out, rmElapsed, err := driver.Remove(ctr)
 				if err != nil {
@@ -150,6 +152,7 @@ func (cb *CustomBench) runThread(driver driver.Driver, threadNum, iterations int
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations["delete"] = rmElapsed
+				log.Debug(out)
 			case "pause":
 				out, pauseElapsed, err := driver.Pause(ctr)
 				if err != nil {
@@ -157,6 +160,7 @@ func (cb *CustomBench) runThread(driver driver.Driver, threadNum, iterations int
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations["pause"] = pauseElapsed
+				log.Debug(out)
 			case "unpause", "resume":
 				out, unpauseElapsed, err := driver.Unpause(ctr)
 				if err != nil {
@@ -164,6 +168,15 @@ func (cb *CustomBench) runThread(driver driver.Driver, threadNum, iterations int
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations["resume"] = unpauseElapsed
+				log.Debug(out)
+			case "wait":
+				out, waitElapsed, err := driver.Wait(ctr)
+				if err != nil {
+					errors["wait"]++
+					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
+				}
+				durations["wait"] = waitElapsed
+				log.Debug(out)
 			default:
 				log.Errorf("Command %q unrecognized from YAML commands list; skipping", cmd)
 			}
@@ -171,6 +184,7 @@ func (cb *CustomBench) runThread(driver driver.Driver, threadNum, iterations int
 		stats <- RunStatistics{
 			Durations: durations,
 			Errors:    errors,
+			Timestamp: time.Now().UTC(),
 		}
 	}
 	if err := driver.Close(); err != nil {

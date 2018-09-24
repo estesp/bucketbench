@@ -12,6 +12,7 @@ import (
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
+	"github.com/estesp/bucketbench/utils"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -123,6 +124,50 @@ func (r *ContainerdDriver) Path() string {
 // as necessary.
 func (r *ContainerdDriver) Close() error {
 	return r.client.Close()
+}
+
+func (r *ContainerdDriver) PID() (int, error) {
+	p, err := utils.NewProcFromName("containerd")
+	if err != nil {
+		return 0, err
+	}
+
+	return p.PID(), nil
+}
+
+func (r *ContainerdDriver) Wait(ctr Container) (string, int, error) {
+	start := time.Now()
+
+	container, err := r.client.LoadContainer(r.context, ctr.Name())
+	if err != nil {
+		return "", 0, err
+	}
+
+	task, err := container.Task(r.context, nil)
+	if err != nil {
+		return "", 0, err
+	}
+
+	taskStatus, err := task.Status(r.context)
+	if err != nil {
+		return "", 0, err
+	}
+
+	if taskStatus.Status != containerd.Running {
+		return "", 0, fmt.Errorf("task with pid %d is not running", task.Pid())
+	}
+
+	statusC, err := task.Wait(r.context)
+	if err != nil {
+		return "", 0, err
+	}
+
+	<-statusC
+
+	elapsed := time.Since(start)
+	msElapsed := int(elapsed.Nanoseconds() / 1000000)
+
+	return "", msElapsed, nil
 }
 
 // Info returns
@@ -246,6 +291,12 @@ func (r *ContainerdDriver) Remove(ctr Container) (string, int, error) {
 	container, err := r.client.LoadContainer(r.context, ctr.Name())
 	if err != nil {
 		return "", 0, err
+	}
+	if err = stopTask(r.context, container); err != nil {
+		// ignore if the error is that the process had already exited:
+		if !strings.Contains(err.Error(), "not found") {
+			return "", 0, err
+		}
 	}
 	err = container.Delete(r.context, containerd.WithSnapshotCleanup)
 	if err != nil {

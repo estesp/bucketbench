@@ -19,18 +19,26 @@ type Type int
 type RunStatistics struct {
 	Durations map[string]int
 	Errors    map[string]int
+	Timestamp time.Time
+	Daemon    *ProcMetrics
+}
+
+type ProcMetrics struct {
+	Mem uint64
+	CPU float64
 }
 
 // Benchmark is the object form of a YAML-defined custom benchmark
 // used to define the specific operations to perform
 type Benchmark struct {
-	Name     string
-	Image    string
-	Command  string //optionally override the default image CMD/ENTRYPOINT
-	RootFs   string
-	Detached bool
-	Drivers  []DriverConfig
-	Commands []string
+	Name       string
+	Image      string
+	Entrypoint string
+	Command    string // optionally override the default image CMD/ENTRYPOINT
+	RootFs     string
+	Detached   bool
+	Drivers    []DriverConfig
+	Commands   []string
 }
 
 // DriverConfig contains the YAML-defined parameters for running a
@@ -59,6 +67,8 @@ const (
 	Limit Type = iota
 	// Custom is a YAML-defined series of container actions run as a benchmark
 	Custom
+	// Benchmark daemon cpu/memory usage
+	Overhead
 )
 
 // Bench is an interface to manage benchmark execution against a specific driver
@@ -68,8 +78,8 @@ type Bench interface {
 	// engines, pre-pulls images, etc.)
 	Init(name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error
 
-	//Validates the any condition that need to be checked before actual banchmark run.
-	//Helpful in testing operations required in benchmark for single run.
+	// Validates the any condition that need to be checked before actual banchmark run.
+	// Helpful in testing operations required in benchmark for single run.
 	Validate() error
 
 	// Run executes the specified # of iterations against a specified # of
@@ -104,7 +114,11 @@ func New(btype Type) (Bench, error) {
 		return &CustomBench{
 			state: Created,
 		}, nil
+	case Overhead:
+		bench := &OverheadBench{}
+		bench.state = Created
+		return bench, nil
 	default:
-		return nil, fmt.Errorf("No such benchmark type: %v", btype)
+		return nil, fmt.Errorf("no such benchmark type: %v", btype)
 	}
 }
