@@ -182,7 +182,7 @@ func (d *DockerDriver) Run(ctr Container) (string, int, error) {
 	if ctr.Command() != "" {
 		args = append(args, ctr.Command())
 	}
-	
+
 	return utils.ExecTimedCmd(d.dockerBinary, strings.Join(args, " "))
 }
 
@@ -204,6 +204,11 @@ func (d *DockerDriver) Pause(ctr Container) (string, int, error) {
 // Unpause will unpause/resume a container
 func (d *DockerDriver) Unpause(ctr Container) (string, int, error) {
 	return utils.ExecTimedCmd(d.dockerBinary, "unpause "+ctr.Name())
+}
+
+func (d *DockerDriver) Metrics(ctr Container) (interface{}, error) {
+	output, err := utils.ExecCmd(d.dockerBinary, "stats --no-stream "+ctr.Name())
+	return output, err
 }
 
 // return a condensed string of version and daemon information

@@ -13,7 +13,11 @@ drivers:
   iterations: 3
 commands:
 - run
+- stats
 - pause
+- stats
 - resume
+- stats
 - wait
+- stats
 - remove

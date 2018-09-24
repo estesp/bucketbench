@@ -170,6 +170,25 @@ func (r *ContainerdDriver) Wait(ctr Container) (string, int, error) {
 	return "", msElapsed, nil
 }
 
+func (r *ContainerdDriver) Metrics(ctr Container) (interface{}, error) {
+	container, err := r.client.LoadContainer(r.context, ctr.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	task, err := container.Task(r.context, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	metrics, err := task.Metrics(r.context)
+	if err != nil {
+		return nil, err
+	}
+
+	return metrics, nil
+}
+
 // Info returns
 func (r *ContainerdDriver) Info() (string, error) {
 	version, err := r.client.Version(r.context)

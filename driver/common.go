@@ -92,6 +92,8 @@ type Driver interface {
 
 	// PID returns daemon process id
 	PID() (int, error)
+
+	Metrics(ctr Container) (interface{}, error)
 }
 
 // New creates a driver instance of a specific type

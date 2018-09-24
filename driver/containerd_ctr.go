@@ -121,6 +121,10 @@ func (r *CtrDriver) Wait(ctr Container) (string, int, error) {
 	return "", 0, errors.New("not implemented")
 }
 
+func (r *CtrDriver) Metrics(ctr Container) (interface{}, error) {
+	return nil, errors.New("not implemented")
+}
+
 // Info returns
 func (r *CtrDriver) Info() (string, error) {
 	info := "containerd legacy driver (ctr client binary: " + r.ctrBinary + ")"

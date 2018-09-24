@@ -177,6 +177,13 @@ func (cb *CustomBench) runThread(driver driver.Driver, threadNum, iterations int
 				}
 				durations["wait"] = waitElapsed
 				log.Debug(out)
+			case "metrics", "stats":
+				out, err := driver.Metrics(ctr)
+				if err != nil {
+					errors["metrics"]++
+					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
+				}
+				log.Debug(out)
 			default:
 				log.Errorf("Command %q unrecognized from YAML commands list; skipping", cmd)
 			}
