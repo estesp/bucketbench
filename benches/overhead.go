@@ -8,6 +8,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const procMetricsSampleInterval = 500 * time.Millisecond
+
 type OverheadBench struct {
 	CustomBench
 }
@@ -19,7 +21,7 @@ func (b *OverheadBench) Run(threads, iterations int, commands []string) error {
 		return err
 	}
 
-	log.Infof("daemod pid: %d", pid)
+	log.Infof("daemon pid: %d", pid)
 	daemonProc, err := utils.NewProcFromPID(pid)
 	if err != nil {
 		log.WithError(err).Error("could not get proc info: %v", err)
@@ -28,33 +30,27 @@ func (b *OverheadBench) Run(threads, iterations int, commands []string) error {
 
 	var metrics []RunStatistics
 
-	done := make(chan struct{})
+	ticker := time.NewTicker(procMetricsSampleInterval)
+
 	go func() {
-		ticker := time.NewTicker(500 * time.Millisecond)
+		for range ticker.C {
+			mem, err1 := daemonProc.Mem()
+			if err1 != nil {
+				log.WithError(err).Error("could not get memory info")
+			}
 
-		for {
-			select {
-			case <-ticker.C:
-				mem, err := daemonProc.Mem()
-				if err != nil {
-					log.WithError(err).Error("could not get memory info")
-				}
+			cpu, err2 := daemonProc.CPU()
+			if err2 != nil {
+				log.WithError(err).Error("could not get cpu info")
+			}
 
-				cpu, err := daemonProc.CPU()
-				if err != nil {
-					log.WithError(err).Error("could not get cpu info")
-				}
-
+			if err1 == nil || err2 == nil {
 				stat := RunStatistics{
 					Timestamp: time.Now().UTC(),
 					Daemon:    &ProcMetrics{Mem: mem / 1024 / 1024, CPU: cpu},
 				}
 
 				metrics = append(metrics, stat)
-
-			case <-done:
-				ticker.Stop()
-				return
 			}
 		}
 	}()
@@ -62,7 +58,7 @@ func (b *OverheadBench) Run(threads, iterations int, commands []string) error {
 	err = b.CustomBench.Run(threads, iterations, commands)
 
 	// Stop gathering metrics
-	close(done)
+	ticker.Stop()
 
 	b.stats = append(b.stats, metrics...)
 	sort.Slice(b.stats, func(i, j int) bool {

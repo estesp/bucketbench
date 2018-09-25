@@ -20,6 +20,7 @@ const defaultDockerBinary = "docker"
 type DockerDriver struct {
 	dockerBinary string
 	dockerInfo   string
+	logDriver    string
 }
 
 // DockerContainer is an implementation of the container metadata needed for docker
@@ -32,18 +33,27 @@ type DockerContainer struct {
 }
 
 // NewDockerDriver creates an instance of the docker driver, providing a path to the docker client binary
-func NewDockerDriver(binaryPath string) (Driver, error) {
+func NewDockerDriver(binaryPath string, logDriver string) (Driver, error) {
 	if binaryPath == "" {
 		binaryPath = defaultDockerBinary
 	}
+
 	resolvedBinPath, err := utils.ResolveBinary(binaryPath)
 	if err != nil {
 		return &DockerDriver{}, err
 	}
+
 	driver := &DockerDriver{
 		dockerBinary: resolvedBinPath,
+		logDriver:    logDriver,
 	}
-	driver.Info()
+
+	info, err := driver.Info()
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debugf("running docker driver: '%s', log driver: '%s'", info, logDriver)
 	return driver, nil
 }
 
@@ -175,6 +185,10 @@ func (d *DockerDriver) Run(ctr Container) (string, int, error) {
 
 	if ctr.Detached() {
 		args = append(args, "-d")
+	}
+
+	if d.logDriver != "" {
+		args = append(args, "--log-driver", d.logDriver)
 	}
 
 	args = append(args, "--name", ctr.Name(), ctr.Image())

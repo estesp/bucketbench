@@ -33,7 +33,6 @@ type ProcMetrics struct {
 type Benchmark struct {
 	Name       string
 	Image      string
-	Entrypoint string
 	Command    string // optionally override the default image CMD/ENTRYPOINT
 	RootFs     string
 	Detached   bool
@@ -45,9 +44,10 @@ type Benchmark struct {
 // benchmark against a specific driver type
 type DriverConfig struct {
 	Type       string
-	ClientPath string //optional path to specific client binary/socket
+	ClientPath string // optional path to specific client binary/socket
 	Threads    int
 	Iterations int
+	LogDriver  string
 }
 
 // State constants
@@ -104,7 +104,7 @@ type Bench interface {
 }
 
 // New creates an instance of the selected benchmark type
-func New(btype Type) (Bench, error) {
+func New(btype Type, logDriver string) (Bench, error) {
 	switch btype {
 	case Limit:
 		return &LimitBench{
@@ -112,11 +112,13 @@ func New(btype Type) (Bench, error) {
 		}, nil
 	case Custom:
 		return &CustomBench{
-			state: Created,
+			state:     Created,
+			logDriver: logDriver,
 		}, nil
 	case Overhead:
 		bench := &OverheadBench{}
 		bench.state = Created
+		bench.logDriver = logDriver
 		return bench, nil
 	default:
 		return nil, fmt.Errorf("no such benchmark type: %v", btype)

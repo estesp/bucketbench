@@ -97,12 +97,12 @@ type Driver interface {
 }
 
 // New creates a driver instance of a specific type
-func New(dtype Type, path string) (Driver, error) {
+func New(dtype Type, path string, logDriver string) (Driver, error) {
 	switch dtype {
 	case Runc:
 		return NewRuncDriver(path)
 	case Docker:
-		return NewDockerDriver(path)
+		return NewDockerDriver(path, logDriver)
 	case Containerd:
 		return NewContainerdDriver(path)
 	case Ctr:

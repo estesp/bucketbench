@@ -32,6 +32,7 @@ import (
 const (
 	defaultLimitThreads = 10
 	defaultLimitIter    = 1000
+	limitBenchmarkName  = "Limit"
 )
 
 var (
@@ -77,11 +78,11 @@ iterations and number of concurrent threads. Results will be displayed afterward
 			maxThreads = defaultLimitThreads
 			results    []benchResult
 		)
-		if !skipLimit && !overhead {
+		if !skipLimit {
 			// get thread limit stats
 			limitRates := runLimitTest()
 			limitResult := benchResult{
-				name:        "Limit",
+				name:        limitBenchmarkName,
 				threads:     defaultLimitThreads,
 				iterations:  defaultLimitIter,
 				threadRates: limitRates,
@@ -105,12 +106,8 @@ iterations and number of concurrent threads. Results will be displayed afterward
 			maxThreads = intMax(maxThreads, driverEntry.Threads)
 		}
 
-		if overhead {
-			outputMetrics(results)
-		} else {
-			// output benchmark results
-			outputRunDetails(maxThreads, results)
-		}
+		// output benchmark results
+		outputRunDetails(maxThreads, results, overhead)
 
 		log.Info("Benchmark runs complete")
 		return nil
@@ -121,7 +118,7 @@ func runLimitTest() []float64 {
 	var rates []float64
 	// get thread limit stats
 	for i := 1; i <= defaultLimitThreads; i++ {
-		limit, _ := benches.New(benches.Limit)
+		limit, _ := benches.New(benches.Limit, "")
 		limit.Init("", driver.Null, "", "", "", trace)
 		limit.Run(i, defaultLimitIter, nil)
 		duration := limit.Elapsed()
@@ -132,7 +129,7 @@ func runLimitTest() []float64 {
 	return rates
 }
 
-func runBenchmark(btype benches.Type, driverConfig benches.DriverConfig, benchmark benches.Benchmark) (benchResult, error) {
+func runBenchmark(benchType benches.Type, driverConfig benches.DriverConfig, benchmark benches.Benchmark) (benchResult, error) {
 	var (
 		rates     []float64
 		stats     [][]benches.RunStatistics
@@ -142,7 +139,7 @@ func runBenchmark(btype benches.Type, driverConfig benches.DriverConfig, benchma
 	stats = make([][]benches.RunStatistics, driverConfig.Threads)
 
 	for i := 1; i <= driverConfig.Threads; i++ {
-		bench, _ := benches.New(btype)
+		bench, _ := benches.New(benchType, driverConfig.LogDriver)
 		imageInfo := benchmark.Image
 		if driverType == driver.Runc || driverType == driver.Ctr {
 			// legacy ctr mode and runc drivers need an exploded rootfs
@@ -152,11 +149,7 @@ func runBenchmark(btype benches.Type, driverConfig benches.DriverConfig, benchma
 			}
 			imageInfo = benchmark.RootFs
 		}
-		command := benchmark.Command
-		if driverType == driver.Containerd {
-			command = benchmark.Entrypoint + " " + benchmark.Command
-		}
-		err := bench.Init(benchmark.Name, driverType, driverConfig.ClientPath, imageInfo, command, trace)
+		err := bench.Init(benchmark.Name, driverType, driverConfig.ClientPath, imageInfo, benchmark.Command, trace)
 		if err != nil {
 			return benchResult{}, err
 		}
@@ -184,54 +177,6 @@ func runBenchmark(btype benches.Type, driverConfig benches.DriverConfig, benchma
 	return result, nil
 }
 
-func outputMetrics(results []benchResult) {
-	w := tabwriter.NewWriter(os.Stdout, 10, 8, 2, ' ', tabwriter.AlignRight)
-
-	fmt.Fprintf(w, "Bench / driver / threads\tMin\tMax\tAvg\tMin\tMax\tAvg\tMem %%\tCPU x\t\n")
-
-	if len(results) == 0 {
-		fmt.Fprint(w, "No data")
-		return
-	}
-
-	// Preprocess statistics before output
-	metrics := make([][]metricsResults, len(results))
-	for i, res := range results {
-		metrics[i] = make([]metricsResults, res.threads)
-		for j := 0; j < res.threads; j++ {
-			metrics[i][j] = parseMetrics(res.statistics[j])
-		}
-	}
-
-	for i, res := range results {
-		for j := 0; j < res.threads; j++ {
-			m := metrics[i][j]
-
-			fmt.Fprintf(w,
-				"%s:%d\t%d MB\t%d MB\t%d MB\t%.2f %%\t%.2f %%\t%.2f %%\t",
-				res.name, j+1,
-				m.minMem, m.maxMem, m.avgMem,
-				m.minCPU, m.maxCPU, m.avgCPU)
-
-			if i > 0 {
-				// Output overhead comparing to first result
-
-				if j < results[0].threads {
-					// Mem percent change, ranging from -100% up.
-					mem := 100*getDelta(float64(metrics[0][j].avgMem), float64(m.avgMem)) - 100
-					cpu := getDelta(metrics[0][j].avgCPU, m.avgCPU)
-
-					fmt.Fprintf(w, "%+.2f%%\t%+.2fx\t", mem, cpu)
-				}
-			}
-
-			fmt.Fprint(w, "\n")
-		}
-	}
-
-	w.Flush()
-}
-
 func getDelta(before, after float64) float64 {
 	switch {
 	case before != 0:
@@ -243,7 +188,7 @@ func getDelta(before, after float64) float64 {
 	}
 }
 
-func outputRunDetails(maxThreads int, results []benchResult) {
+func outputRunDetails(maxThreads int, results []benchResult, overhead bool) {
 	w := tabwriter.NewWriter(os.Stdout, 10, 4, 2, ' ', tabwriter.AlignRight)
 
 	fmt.Printf("\nSUMMARY TIMINGS/THREAD RATES\n\n")
@@ -267,7 +212,7 @@ func outputRunDetails(maxThreads int, results []benchResult) {
 	fmt.Printf("DETAILED COMMAND TIMINGS/STATISTICS\n")
 	// output per-command timings across the runs as well
 	for _, result := range results {
-		if result.name == "Limit" {
+		if result.name == limitBenchmarkName {
 			// the limit "benchmark" has no detailed statistics
 			continue
 		}
@@ -285,7 +230,65 @@ func outputRunDetails(maxThreads int, results []benchResult) {
 		}
 		fmt.Println("")
 	}
+
 	w.Flush()
+
+	if overhead {
+		fmt.Fprintf(w, "\n")
+		fmt.Fprintf(w, "OVERHEAD\n\n")
+
+		fmt.Fprintf(w, "Bench / driver / threads\tMin\tMax\tAvg\tMin\tMax\tAvg\tMem %%\tCPU x\t\n")
+
+		var overheadResults []benchResult
+		for _, res := range results {
+			if res.name == limitBenchmarkName {
+				continue
+			}
+			overheadResults = append(overheadResults, res)
+		}
+
+		if len(overheadResults) == 0 {
+			fmt.Fprint(w, "No data")
+			return
+		}
+
+		// Preprocess statistics before output
+		metrics := make([][]metricsResults, len(overheadResults))
+		for i, res := range overheadResults {
+			metrics[i] = make([]metricsResults, res.threads)
+			for j := 0; j < len(res.statistics); j++ {
+				metrics[i][j] = parseMetrics(res.statistics[j])
+			}
+		}
+
+		for i, res := range overheadResults {
+			for j := 0; j < res.threads; j++ {
+				m := metrics[i][j]
+
+				fmt.Fprintf(w,
+					"%s:%d\t%d MB\t%d MB\t%d MB\t%.2f %%\t%.2f %%\t%.2f %%\t",
+					res.name, j+1,
+					m.minMem, m.maxMem, m.avgMem,
+					m.minCPU, m.maxCPU, m.avgCPU)
+
+				if i > 0 {
+					// Output overhead comparing to first result
+
+					if j < overheadResults[0].threads {
+						// Mem percent change, ranging from -100% up.
+						mem := 100*getDelta(float64(metrics[0][j].avgMem), float64(m.avgMem)) - 100
+						cpu := getDelta(metrics[0][j].avgCPU, m.avgCPU)
+
+						fmt.Fprintf(w, "%+.2f%%\t%+.2fx\t", mem, cpu)
+					}
+				}
+
+				fmt.Fprint(w, "\n")
+			}
+		}
+
+		w.Flush()
+	}
 }
 
 type metricsResults struct {
@@ -298,15 +301,14 @@ type metricsResults struct {
 }
 
 func parseMetrics(metrics []benches.RunStatistics) metricsResults {
-
 	var mems []float64
 	var cpus []float64
 
-	for _, m := range metrics {
-		if m.Daemon == nil {
-			continue
-		}
+	metrics = filterStats(metrics, func(stat benches.RunStatistics) bool {
+		return stat.Daemon != nil
+	})
 
+	for _, m := range metrics {
 		mems = append(mems, float64(m.Daemon.Mem))
 		cpus = append(cpus, m.Daemon.CPU)
 	}
@@ -360,10 +362,25 @@ type statResults struct {
 	errors int
 }
 
+func filterStats(stats []benches.RunStatistics, check func(benches.RunStatistics) bool) (ret []benches.RunStatistics) {
+	for _, stat := range stats {
+		if check(stat) {
+			ret = append(ret, stat)
+		}
+	}
+
+	return
+}
+
 func parseStats(statistics []benches.RunStatistics) map[string]statResults {
 	result := make(map[string]statResults)
 	durationSeq := make(map[string][]float64)
 	errorSeq := make(map[string][]int)
+
+	statistics = filterStats(statistics, func(stat benches.RunStatistics) bool {
+		return stat.Daemon == nil
+	})
+
 	iterations := len(statistics)
 
 	durationKeys := make([]string, len(statistics[0].Durations))

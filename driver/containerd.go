@@ -10,6 +10,7 @@ import (
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/cio"
+	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/estesp/bucketbench/utils"
@@ -313,7 +314,7 @@ func (r *ContainerdDriver) Remove(ctr Container) (string, int, error) {
 	}
 	if err = stopTask(r.context, container); err != nil {
 		// ignore if the error is that the process had already exited:
-		if !strings.Contains(err.Error(), "not found") {
+		if !errdefs.IsNotFound(err) {
 			return "", 0, err
 		}
 	}
@@ -404,10 +405,11 @@ func resolveDockerImageName(name string) string {
 func stopTask(ctx context.Context, ctr containerd.Container) error {
 	task, err := ctr.Task(ctx, nil)
 	if err != nil {
-		if !strings.Contains(err.Error(), "no running task") {
+		if !errdefs.IsNotFound(err) {
 			return err
 		}
-		//nothing to do; no task running
+
+		// nothing to do; no task running
 		return nil
 	}
 	status, err := task.Status(ctx)

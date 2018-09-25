@@ -17,6 +17,7 @@ type CustomBench struct {
 	driver      driver.Driver
 	imageInfo   string
 	cmdOverride string
+	logDriver   string
 	trace       bool
 	stats       []RunStatistics
 	elapsed     time.Duration
@@ -26,7 +27,7 @@ type CustomBench struct {
 
 // Init initializes the benchmark
 func (cb *CustomBench) Init(name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error {
-	driver, err := driver.New(driverType, binaryPath)
+	driver, err := driver.New(driverType, binaryPath, cb.logDriver)
 	if err != nil {
 		return fmt.Errorf("Error during driver initialization for CustomBench: %v", err)
 	}
@@ -90,7 +91,7 @@ func (cb *CustomBench) Run(threads, iterations int, commands []string) error {
 	for i := 0; i < threads; i++ {
 		// create a driver instance for each thread to protect from drivers
 		// which may not be threadsafe (e.g. gRPC client connection in containerd?)
-		drv, err := driver.New(cb.driver.Type(), cb.driver.Path())
+		drv, err := driver.New(cb.driver.Type(), cb.driver.Path(), cb.logDriver)
 		if err != nil {
 			return fmt.Errorf("error creating new driver for thread %d: %v", i, err)
 		}
@@ -128,6 +129,7 @@ func (cb *CustomBench) runThread(driver driver.Driver, threadNum, iterations int
 		}
 
 		for _, cmd := range commands {
+			log.Debugf("running command: %s", cmd)
 			switch strings.ToLower(cmd) {
 			case "run", "start":
 				out, runElapsed, err := driver.Run(ctr)
