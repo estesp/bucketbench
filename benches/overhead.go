@@ -27,7 +27,7 @@ func (b *OverheadBench) Run(threads, iterations int, commands []string) error {
 	log.Infof("daemon pid: %d", pid)
 	daemonProc, err := utils.NewProcFromPID(pid, b.driver.ProcNames())
 	if err != nil {
-		log.WithError(err).Error("could not get proc info: %v", err)
+		log.WithError(err).Errorf("could not get proc info: %v", err)
 		return err
 	}
 

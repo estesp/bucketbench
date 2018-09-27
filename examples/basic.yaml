@@ -4,7 +4,7 @@ rootfs:    /home/estesp/containers/alpine
 detached: true
 drivers:
   - 
-   type: Docker
+   type: DockerCLI
    threads: 5
    iterations: 15
   - 

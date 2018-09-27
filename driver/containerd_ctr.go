@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/estesp/bucketbench/utils"
 	log "github.com/sirupsen/logrus"
@@ -117,7 +118,7 @@ func (r *CtrDriver) PID() (int, error) {
 	return 0, errors.New("not implemented")
 }
 
-func (r *CtrDriver) Wait(ctr Container) (string, int, error) {
+func (r *CtrDriver) Wait(ctr Container) (string, time.Duration, error) {
 	return "", 0, errors.New("not implemented")
 }
 
@@ -192,30 +193,30 @@ func (r *CtrDriver) Clean() error {
 }
 
 // Run will execute a container using the containerd driver.
-func (r *CtrDriver) Run(ctr Container) (string, int, error) {
+func (r *CtrDriver) Run(ctr Container) (string, time.Duration, error) {
 	args := fmt.Sprintf("containers start %s %s", ctr.Name(), ctr.Image())
 	// the "NoOut" variant of ExecTimedCmd ignores stdin/out/err (sets them to /dev/null)
 	return utils.ExecTimedCmdNoOut(r.ctrBinary, args)
 }
 
 // Stop will stop/kill a container
-func (r *CtrDriver) Stop(ctr Container) (string, int, error) {
+func (r *CtrDriver) Stop(ctr Container) (string, time.Duration, error) {
 	return utils.ExecTimedCmd(r.ctrBinary, "containers kill "+ctr.Name())
 }
 
 // Remove will remove a container; in the containerd case we simply call kill
 // which will remove any container metadata if it was running
-func (r *CtrDriver) Remove(ctr Container) (string, int, error) {
+func (r *CtrDriver) Remove(ctr Container) (string, time.Duration, error) {
 	return utils.ExecTimedCmd(r.ctrBinary, "containers kill "+ctr.Name())
 }
 
 // Pause will pause a container
-func (r *CtrDriver) Pause(ctr Container) (string, int, error) {
+func (r *CtrDriver) Pause(ctr Container) (string, time.Duration, error) {
 	return utils.ExecTimedCmd(r.ctrBinary, "containers pause "+ctr.Name())
 }
 
 // Unpause will unpause/resume a container
-func (r *CtrDriver) Unpause(ctr Container) (string, int, error) {
+func (r *CtrDriver) Unpause(ctr Container) (string, time.Duration, error) {
 	return utils.ExecTimedCmd(r.ctrBinary, "containers resume "+ctr.Name())
 }
 

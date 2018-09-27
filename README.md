@@ -1,25 +1,3 @@
-# Fork
-This fork adds a benchmark to measure daemon metrics (cpu/memory usage) in
-order to understand the overhead between different container implementations.
-
-How to run:
-```
-sudo ./bench run -b overhead.yaml --overhead
-```
-
-Example output:
-```
-    Bench / driver / threads       Min       Max       Avg       Min       Max       Avg     Mem %     CPU x
-  OverheadBench:Containerd:1     40 MB     42 MB     41 MB    0.00 %    6.00 %    0.32 %
-  OverheadBench:Containerd:2     44 MB     46 MB     44 MB    0.00 %   10.00 %    0.57 %
-  OverheadBench:Containerd:3     46 MB     46 MB     46 MB    0.00 %   14.00 %    0.73 %
-  OverheadBench:Containerd:4     46 MB     47 MB     46 MB    0.00 %   20.00 %    0.94 %
-      OverheadBench:Docker:1     64 MB     66 MB     64 MB    0.00 %   10.00 %    0.58 %   +56.10%    +1.84x
-      OverheadBench:Docker:2     69 MB     73 MB     70 MB    0.00 %   20.00 %    1.29 %   +59.09%    +2.26x
-      OverheadBench:Docker:3     73 MB     73 MB     73 MB    0.00 %   32.00 %    1.97 %   +58.70%    +2.70x
-      OverheadBench:Docker:4     73 MB     73 MB     73 MB    0.00 %   27.99 %    2.67 %   +58.70%    +2.85x
-```
-
 # bucketbench
 Bucketbench is a simple framework for running defined sequences
 of lifecycle container operations against three different container
@@ -61,6 +39,7 @@ Usage:
 Flags:
   -b, --benchmark string   YAML file with benchmark definition
   -h, --help               help for run
+  -o, --overhead           Output daemon overhead
   -s, --skip-limit         Skip 'limit' benchmark run
   -t, --trace              Enable per-container tracing during benchmark runs
 
@@ -128,6 +107,8 @@ The following commands are accepted as input:
  - **unpause**: (aliases: **resume**) resume a paused container
  - **stop**: (aliases: **kill**) stop/kill the running container processes
  - **remove**: (aliases: **erase**,**delete**) remove/delete a container instance
+ - **metrics**: (aliases: **stats**) query container daemon metrics
+ - **wait**: wait for container stop
 
 Note that `bucketbench` is not handling any formal state validation on the list
 of commands. It is currently up to the user to provide a valid/sane ordered
@@ -143,6 +124,22 @@ of the thread counts:
 Limit            1000    1171.24  1957.17  2101.13  2067.83  1827.92  1637.32  1257.57  1582.36  1306.08  1699.56
 Basic:Docker       15       1.40     2.21     2.81
 Basic:Runc         50       8.38    15.85    23.00
+```
+
+If you add `overhead` flag, `bucketbench` will measure container daemon cpu
+and memory consumption. The output will look like:
+
+```
+    Bench / driver / threads       Min       Max       Avg       Min       Max       Avg     Mem %     CPU x
+  OverheadBench:Containerd:1     40 MB     42 MB     41 MB    0.00 %    6.00 %    0.32 %
+  OverheadBench:Containerd:2     44 MB     46 MB     44 MB    0.00 %   10.00 %    0.57 %
+  OverheadBench:Containerd:3     46 MB     46 MB     46 MB    0.00 %   14.00 %    0.73 %
+  OverheadBench:Containerd:4     46 MB     47 MB     46 MB    0.00 %   20.00 %    0.94 %
+
+      OverheadBench:Docker:1     64 MB     66 MB     64 MB    0.00 %   10.00 %    0.58 %   +56.10%    +1.84x
+      OverheadBench:Docker:2     69 MB     73 MB     70 MB    0.00 %   20.00 %    1.29 %   +59.09%    +2.26x
+      OverheadBench:Docker:3     73 MB     73 MB     73 MB    0.00 %   32.00 %    1.97 %   +58.70%    +2.70x
+      OverheadBench:Docker:4     73 MB     73 MB     73 MB    0.00 %   27.99 %    2.67 %   +58.70%    +2.85x
 ```
 
 More detailed information is collected during the runs and a future PR to

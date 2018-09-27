@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/estesp/bucketbench/utils"
 	log "github.com/sirupsen/logrus"
@@ -119,7 +120,7 @@ func (r *RuncDriver) PID() (int, error) {
 }
 
 // Wait will block until container stop
-func (r *RuncDriver) Wait(ctr Container) (string, int, error) {
+func (r *RuncDriver) Wait(ctr Container) (string, time.Duration, error) {
 	return "", 0, errors.New("not implemented")
 }
 
@@ -193,7 +194,7 @@ func (r *RuncDriver) Clean() error {
 // device to runc. Detached daemon/server bundles should not need a tty; stdin/out/err of
 // the container will be ignored given this is for benchmarking not validating container
 // operation.
-func (r *RuncDriver) Run(ctr Container) (string, int, error) {
+func (r *RuncDriver) Run(ctr Container) (string, time.Duration, error) {
 	var (
 		detached string
 		trace    string
@@ -211,22 +212,22 @@ func (r *RuncDriver) Run(ctr Container) (string, int, error) {
 }
 
 // Stop will stop/kill a container
-func (r *RuncDriver) Stop(ctr Container) (string, int, error) {
+func (r *RuncDriver) Stop(ctr Container) (string, time.Duration, error) {
 	return utils.ExecTimedCmd(r.runcBinary, "kill "+ctr.Name()+" KILL")
 }
 
 // Remove will remove a container
-func (r *RuncDriver) Remove(ctr Container) (string, int, error) {
+func (r *RuncDriver) Remove(ctr Container) (string, time.Duration, error) {
 	return utils.ExecTimedCmd(r.runcBinary, "delete "+ctr.Name())
 }
 
 // Pause will pause a container
-func (r *RuncDriver) Pause(ctr Container) (string, int, error) {
+func (r *RuncDriver) Pause(ctr Container) (string, time.Duration, error) {
 	return utils.ExecTimedCmd(r.runcBinary, "pause "+ctr.Name())
 }
 
 // Unpause will unpause/resume a container
-func (r *RuncDriver) Unpause(ctr Container) (string, int, error) {
+func (r *RuncDriver) Unpause(ctr Container) (string, time.Duration, error) {
 	return utils.ExecTimedCmd(r.runcBinary, "resume "+ctr.Name())
 }
 

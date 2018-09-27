@@ -212,7 +212,7 @@ func (c CRIDriver) Clean() error {
 }
 
 // Run will execute a container using the driver
-func (c *CRIDriver) Run(ctr Container) (string, int, error) {
+func (c *CRIDriver) Run(ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 	cconfig := cconfigGlobal
 	pconfig := pconfigGlobal
@@ -224,13 +224,11 @@ func (c *CRIDriver) Run(ctr Container) (string, int, error) {
 		return "", 0, err
 	}
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-
-	return "", msElapsed, nil
+	return "", elapsed, nil
 }
 
 // Stop will stop/kill a container
-func (c *CRIDriver) Stop(ctr Container) (string, int, error) {
+func (c *CRIDriver) Stop(ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 	resp, err := (*c.runtimeClient).ListContainers(c.context, &pb.ListContainersRequest{Filter: &pb.ContainerFilter{PodSandboxId: ctr.GetPodID()}})
 	if err != nil {
@@ -252,13 +250,11 @@ func (c *CRIDriver) Stop(ctr Container) (string, int, error) {
 		}
 	}
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-
-	return "", msElapsed, nil
+	return "", elapsed, nil
 }
 
 // Remove will remove a container
-func (c *CRIDriver) Remove(ctr Container) (string, int, error) {
+func (c *CRIDriver) Remove(ctr Container) (string, time.Duration, error) {
 
 	start := time.Now()
 	resp, err := (*c.runtimeClient).ListContainers(c.context, &pb.ListContainersRequest{Filter: &pb.ContainerFilter{PodSandboxId: ctr.GetPodID()}})
@@ -281,20 +277,18 @@ func (c *CRIDriver) Remove(ctr Container) (string, int, error) {
 		}
 	}
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-
-	return "", msElapsed, nil
+	return "", elapsed, nil
 }
 
 // Pause will pause a container
 // not supported in CRI API
-func (c *CRIDriver) Pause(ctr Container) (string, int, error) {
+func (c *CRIDriver) Pause(ctr Container) (string, time.Duration, error) {
 	return "", 0, nil
 }
 
 // Unpause will unpause/resume a container
 // not supported in CRI API
-func (c *CRIDriver) Unpause(ctr Container) (string, int, error) {
+func (c *CRIDriver) Unpause(ctr Container) (string, time.Duration, error) {
 	return "", 0, nil
 }
 
@@ -308,7 +302,7 @@ func (c *CRIDriver) PID() (int, error) {
 	return 0, errors.New("not implemented")
 }
 
-func (c *CRIDriver) Wait(ctr Container) (string, int, error) {
+func (c *CRIDriver) Wait(ctr Container) (string, time.Duration, error) {
 	return "", 0, errors.New("not implemented")
 }
 

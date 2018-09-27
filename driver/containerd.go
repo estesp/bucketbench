@@ -139,7 +139,7 @@ func (r *ContainerdDriver) PID() (int, error) {
 	return utils.FindPIDByName(containerdDaemonName)
 }
 
-func (r *ContainerdDriver) Wait(ctr Container) (string, int, error) {
+func (r *ContainerdDriver) Wait(ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 
 	container, err := r.client.LoadContainer(r.context, ctr.Name())
@@ -169,9 +169,7 @@ func (r *ContainerdDriver) Wait(ctr Container) (string, int, error) {
 	<-statusC
 
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-
-	return "", msElapsed, nil
+	return "", elapsed, nil
 }
 
 func (r *ContainerdDriver) ProcNames() []string {
@@ -256,7 +254,7 @@ func (r *ContainerdDriver) Clean() error {
 }
 
 // Run will execute a container using the containerd driver.
-func (r *ContainerdDriver) Run(ctr Container) (string, int, error) {
+func (r *ContainerdDriver) Run(ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 	image, err := r.client.GetImage(r.context, ctr.Image())
 	if err != nil {
@@ -288,13 +286,12 @@ func (r *ContainerdDriver) Run(ctr Container) (string, int, error) {
 		return "", 0, err
 	}
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-	return stdouterr.String(), msElapsed, nil
+	return stdouterr.String(), elapsed, nil
 }
 
 // Stop will stop/kill a container (specifically, the tasks [processes]
 // running in the container)
-func (r *ContainerdDriver) Stop(ctr Container) (string, int, error) {
+func (r *ContainerdDriver) Stop(ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 	container, err := r.client.LoadContainer(r.context, ctr.Name())
 	if err != nil {
@@ -307,13 +304,12 @@ func (r *ContainerdDriver) Stop(ctr Container) (string, int, error) {
 		}
 	}
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-	return "", msElapsed, nil
+	return "", elapsed, nil
 }
 
 // Remove will remove a container; in the containerd case we simply call kill
 // which will remove any container metadata if it was running
-func (r *ContainerdDriver) Remove(ctr Container) (string, int, error) {
+func (r *ContainerdDriver) Remove(ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 	container, err := r.client.LoadContainer(r.context, ctr.Name())
 	if err != nil {
@@ -330,12 +326,11 @@ func (r *ContainerdDriver) Remove(ctr Container) (string, int, error) {
 	}
 
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-	return "", msElapsed, nil
+	return "", elapsed, nil
 }
 
 // Pause will pause a container
-func (r *ContainerdDriver) Pause(ctr Container) (string, int, error) {
+func (r *ContainerdDriver) Pause(ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 	container, err := r.client.LoadContainer(r.context, ctr.Name())
 	if err != nil {
@@ -350,12 +345,11 @@ func (r *ContainerdDriver) Pause(ctr Container) (string, int, error) {
 		return "", 0, err
 	}
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-	return "", msElapsed, nil
+	return "", elapsed, nil
 }
 
 // Unpause will unpause/resume a container
-func (r *ContainerdDriver) Unpause(ctr Container) (string, int, error) {
+func (r *ContainerdDriver) Unpause(ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 	container, err := r.client.LoadContainer(r.context, ctr.Name())
 	if err != nil {
@@ -370,8 +364,7 @@ func (r *ContainerdDriver) Unpause(ctr Container) (string, int, error) {
 		return "", 0, err
 	}
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-	return "", msElapsed, nil
+	return "", elapsed, nil
 }
 
 // much of this code is copied from docker/docker/reference.go
@@ -441,7 +434,7 @@ func stopTask(ctx context.Context, ctr containerd.Container) error {
 			log.Errorf("container %q: error getting task result code: %v", ctr.ID(), err)
 		}
 		if code != 0 {
-			log.Debugf("%s: exited container process: code: %d", ctr.ID(), status)
+			log.Debugf("%s: exited container process: code: %v", ctr.ID(), status)
 		}
 		_, err = task.Delete(ctx)
 		if err != nil {

@@ -7,13 +7,10 @@ drivers:
 - type: Containerd
   threads: 4
   iterations: 3
-- type: Docker
+- type: DockerCLI
   threads: 4
   iterations: 3
   logDriver: syslog
-- type: Docker
-  threads: 4
-  iterations: 3
 commands:
 - run
 - stats

@@ -17,7 +17,7 @@ type Type int
 // Each "step" from the benchmark is named and a map of the name
 // to a millisecond duration for that step is provided
 type RunStatistics struct {
-	Durations map[string]int
+	Durations map[string]time.Duration
 	Errors    map[string]int
 	Timestamp time.Time
 	Daemon    *ProcMetrics

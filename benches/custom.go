@@ -119,7 +119,7 @@ func (cb *CustomBench) Run(threads, iterations int, commands []string) error {
 func (cb *CustomBench) runThread(driver driver.Driver, threadNum, iterations int, commands []string, stats chan RunStatistics) {
 	for i := 0; i < iterations; i++ {
 		errors := make(map[string]int)
-		durations := make(map[string]int)
+		durations := make(map[string]time.Duration)
 		// commands are specified in the passed in array; we will need
 		// a container for each set of commands:
 		name := fmt.Sprintf("bb-ctr-%d-%d", threadNum, i)

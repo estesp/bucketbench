@@ -3,7 +3,7 @@ image: alpine:latest
 detached: true
 drivers:
   - 
-   type: Docker
+   type: DockerCLI
    threads: 3
    iterations: 15
 commands:

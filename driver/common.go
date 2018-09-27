@@ -1,13 +1,16 @@
 package driver
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Type represents the know implementations of the driver interface
 type Type int
 
 const (
-	// Docker represents the Docker driver implementation
-	Docker Type = iota
+	// DockerCLI represents the Docker CLI driver implementation
+	DockerCLI Type = iota
 	// Runc represents the runc-based driver implementation
 	Runc
 	// Containerd represents the containerd-based driver implementation
@@ -69,22 +72,22 @@ type Driver interface {
 	Clean() error
 
 	// Run will execute a container using the driver
-	Run(ctr Container) (string, int, error)
+	Run(ctr Container) (string, time.Duration, error)
 
 	// Stop will stop/kill a container
-	Stop(ctr Container) (string, int, error)
+	Stop(ctr Container) (string, time.Duration, error)
 
 	// Remove will remove a container
-	Remove(ctr Container) (string, int, error)
+	Remove(ctr Container) (string, time.Duration, error)
 
 	// Pause will pause a container
-	Pause(ctr Container) (string, int, error)
+	Pause(ctr Container) (string, time.Duration, error)
 
 	// Unpause will unpause/resume a container
-	Unpause(ctr Container) (string, int, error)
+	Unpause(ctr Container) (string, time.Duration, error)
 
 	// Wait blocks thread until container stop
-	Wait(ctr Container) (string, int, error)
+	Wait(ctr Container) (string, time.Duration, error)
 
 	// Close allows the driver to free any resources/close any
 	// connections
@@ -104,8 +107,8 @@ func New(dtype Type, path string, logDriver string) (Driver, error) {
 	switch dtype {
 	case Runc:
 		return NewRuncDriver(path)
-	case Docker:
-		return NewDockerDriver(path, logDriver)
+	case DockerCLI:
+		return NewDockerCLIDriver(path, logDriver)
 	case Containerd:
 		return NewContainerdDriver(path)
 	case Ctr:
@@ -123,8 +126,8 @@ func New(dtype Type, path string, logDriver string) (Driver, error) {
 func TypeToString(dtype Type) string {
 	var driverType string
 	switch dtype {
-	case Docker:
-		driverType = "Docker"
+	case DockerCLI:
+		driverType = "DockerCLI"
 	case Containerd:
 		driverType = "Containerd"
 	case Ctr:
@@ -143,8 +146,8 @@ func TypeToString(dtype Type) string {
 func StringToType(dtype string) Type {
 	var driverType Type
 	switch dtype {
-	case "Docker":
-		driverType = Docker
+	case "DockerCLI":
+		driverType = DockerCLI
 	case "Containerd":
 		driverType = Containerd
 	case "Ctr":

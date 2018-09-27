@@ -20,6 +20,7 @@ import (
 	"math"
 	"os"
 	"text/tabwriter"
+	"time"
 
 	"github.com/estesp/bucketbench/benches"
 	"github.com/estesp/bucketbench/driver"
@@ -391,7 +392,7 @@ func parseStats(statistics []benches.RunStatistics) map[string]statResults {
 	}
 	for i := 0; i < iterations; i++ {
 		for key, duration := range statistics[i].Durations {
-			durationSeq[key] = append(durationSeq[key], float64(duration))
+			durationSeq[key] = append(durationSeq[key], float64(duration.Nanoseconds() / int64(time.Millisecond)))
 		}
 		for key, errors := range statistics[i].Errors {
 			errorSeq[key] = append(errorSeq[key], errors)

@@ -61,9 +61,8 @@ func (lb *LimitBench) Run(threads, iterations int, commands []string) error {
 func (lb *LimitBench) runThread(iterations int, stats chan RunStatistics) {
 	for i := 0; i < iterations; i++ {
 		_, elapsed, _ := utils.ExecTimedCmd("ls", "/tmp")
-		//_, elapsed, _ := utils.ExecTimedCmd("date", "")
 		stats <- RunStatistics{
-			Durations: map[string]int{"run": elapsed},
+			Durations: map[string]time.Duration{"run": elapsed},
 		}
 	}
 	close(stats)

@@ -26,7 +26,7 @@ func ResolveBinary(binname string) (string, error) {
 
 // ExecTimedCmdNoOut executes a command and returns any errors, but ignores output
 // This function also times the command and returns the elapsed milliseconds
-func ExecTimedCmdNoOut(cmd, args string) (string, int, error) {
+func ExecTimedCmdNoOut(cmd, args string) (string, time.Duration, error) {
 	start := time.Now()
 	execCmd := exec.Command(cmd, strings.Split(args, " ")...)
 	execCmd.Stdin = nil
@@ -34,19 +34,17 @@ func ExecTimedCmdNoOut(cmd, args string) (string, int, error) {
 	execCmd.Stderr = nil
 	err := execCmd.Run()
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-	return "", msElapsed, errors.Wrapf(err, "exec failed: %s %s", cmd, args)
+	return "", elapsed, errors.Wrapf(err, "exec failed: %s %s", cmd, args)
 }
 
 // ExecTimedCmd executes a command and returns the combined err/out output and any errors
 // This function also times the command and returns the elapsed milliseconds
-func ExecTimedCmd(cmd, args string) (string, int, error) {
+func ExecTimedCmd(cmd, args string) (string, time.Duration, error) {
 	start := time.Now()
 	execCmd := exec.Command(cmd, strings.Split(args, " ")...)
 	out, err := execCmd.CombinedOutput()
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-	return string(out), msElapsed, errors.Wrapf(err, "exec failed: %s %s", cmd, args)
+	return string(out), elapsed, errors.Wrapf(err, "exec failed: %s %s", cmd, args)
 }
 
 // ExecCmd executes a command and returns the combined err/out output and any errors
