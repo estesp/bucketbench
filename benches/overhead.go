@@ -8,7 +8,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const procMetricsSampleInterval = 500 * time.Millisecond
+const (
+	procMetricsSampleInterval = 500 * time.Millisecond
+	bytesInMiB = 1024 * 1024
+)
 
 type OverheadBench struct {
 	CustomBench
@@ -22,7 +25,7 @@ func (b *OverheadBench) Run(threads, iterations int, commands []string) error {
 	}
 
 	log.Infof("daemon pid: %d", pid)
-	daemonProc, err := utils.NewProcFromPID(pid)
+	daemonProc, err := utils.NewProcFromPID(pid, b.driver.ProcNames())
 	if err != nil {
 		log.WithError(err).Error("could not get proc info: %v", err)
 		return err
@@ -34,20 +37,20 @@ func (b *OverheadBench) Run(threads, iterations int, commands []string) error {
 
 	go func() {
 		for range ticker.C {
-			mem, err1 := daemonProc.Mem()
-			if err1 != nil {
-				log.WithError(err).Error("could not get memory info")
+			mem, memErr := daemonProc.Mem()
+			if memErr != nil {
+				log.WithError(memErr).Error("could not get memory info")
 			}
 
-			cpu, err2 := daemonProc.CPU()
-			if err2 != nil {
-				log.WithError(err).Error("could not get cpu info")
+			cpu, cpuErr := daemonProc.CPU()
+			if cpuErr != nil {
+				log.WithError(cpuErr).Error("could not get cpu info")
 			}
 
-			if err1 == nil || err2 == nil {
+			if memErr == nil || cpuErr == nil {
 				stat := RunStatistics{
 					Timestamp: time.Now().UTC(),
-					Daemon:    &ProcMetrics{Mem: mem / 1024 / 1024, CPU: cpu},
+					Daemon:    &ProcMetrics{Mem: mem / bytesInMiB, CPU: cpu},
 				}
 
 				metrics = append(metrics, stat)

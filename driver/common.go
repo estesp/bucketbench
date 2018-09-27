@@ -93,6 +93,9 @@ type Driver interface {
 	// PID returns daemon process id
 	PID() (int, error)
 
+	// ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
+	ProcNames() []string
+
 	Metrics(ctr Container) (interface{}, error)
 }
 

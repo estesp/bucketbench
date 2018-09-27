@@ -127,6 +127,10 @@ func (r *RuncDriver) Metrics(ctr Container) (interface{}, error) {
 	return nil, errors.New("not implemented")
 }
 
+func (r *RuncDriver) ProcNames() []string {
+	return []string{}
+}
+
 // Info returns
 func (r *RuncDriver) Info() (string, error) {
 	info := "runc driver (binary: " + r.runcBinary + ")\n"

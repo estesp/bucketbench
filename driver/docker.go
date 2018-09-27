@@ -14,6 +14,13 @@ import (
 
 const defaultDockerBinary = "docker"
 
+var dockerProcNames = []string {
+	"dockerd",
+	"docker-containerd",
+	"docker-containerd-shim",
+	"docker-proxy",
+}
+
 // DockerDriver is an implementation of the driver interface for the Docker engine.
 // IMPORTANT: This implementation does not protect instance metadata for thread safely.
 // At this time there is no understood use case for multi-threaded use of this implementation.
@@ -223,6 +230,10 @@ func (d *DockerDriver) Unpause(ctr Container) (string, int, error) {
 func (d *DockerDriver) Metrics(ctr Container) (interface{}, error) {
 	output, err := utils.ExecCmd(d.dockerBinary, "stats --no-stream "+ctr.Name())
 	return output, err
+}
+
+func (d *DockerDriver) ProcNames() []string {
+	return dockerProcNames
 }
 
 // return a condensed string of version and daemon information

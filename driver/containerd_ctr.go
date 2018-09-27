@@ -125,6 +125,10 @@ func (r *CtrDriver) Metrics(ctr Container) (interface{}, error) {
 	return nil, errors.New("not implemented")
 }
 
+func (r *CtrDriver) ProcNames() []string {
+	return containerdProcNames
+}
+
 // Info returns
 func (r *CtrDriver) Info() (string, error) {
 	info := "containerd legacy driver (ctr client binary: " + r.ctrBinary + ")"

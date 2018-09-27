@@ -316,6 +316,10 @@ func (c *CRIDriver) Metrics(ctr Container) (interface{}, error) {
 	return nil, errors.New("not implemented")
 }
 
+func (c *CRIDriver) ProcNames() []string {
+	return []string{}
+}
+
 func openFile(path string) (*os.File, error) {
 	f, err := os.Open(path)
 	if err != nil {

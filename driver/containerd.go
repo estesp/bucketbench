@@ -17,7 +17,15 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const defaultContainerdPath = "/run/containerd/containerd.sock"
+const (
+	defaultContainerdPath = "/run/containerd/containerd.sock"
+	containerdDaemonName = "containerd"
+)
+
+var containerdProcNames = []string {
+	"containerd",
+	"containerd-shim",
+}
 
 // ContainerdDriver is an implementation of the driver interface for using Containerd.
 // This uses the provided client library which abstracts using the gRPC APIs directly.
@@ -128,12 +136,7 @@ func (r *ContainerdDriver) Close() error {
 }
 
 func (r *ContainerdDriver) PID() (int, error) {
-	p, err := utils.NewProcFromName("containerd")
-	if err != nil {
-		return 0, err
-	}
-
-	return p.PID(), nil
+	return utils.FindPIDByName(containerdDaemonName)
 }
 
 func (r *ContainerdDriver) Wait(ctr Container) (string, int, error) {
@@ -169,6 +172,10 @@ func (r *ContainerdDriver) Wait(ctr Container) (string, int, error) {
 	msElapsed := int(elapsed.Nanoseconds() / 1000000)
 
 	return "", msElapsed, nil
+}
+
+func (r *ContainerdDriver) ProcNames() []string {
+	return containerdProcNames
 }
 
 func (r *ContainerdDriver) Metrics(ctr Container) (interface{}, error) {
@@ -312,16 +319,16 @@ func (r *ContainerdDriver) Remove(ctr Container) (string, int, error) {
 	if err != nil {
 		return "", 0, err
 	}
+
 	if err = stopTask(r.context, container); err != nil {
-		// ignore if the error is that the process had already exited:
-		if !errdefs.IsNotFound(err) {
-			return "", 0, err
-		}
+		return "", 0, err
 	}
+
 	err = container.Delete(r.context, containerd.WithSnapshotCleanup)
 	if err != nil {
 		return "", 0, err
 	}
+
 	elapsed := time.Since(start)
 	msElapsed := int(elapsed.Nanoseconds() / 1000000)
 	return "", msElapsed, nil
