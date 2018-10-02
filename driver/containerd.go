@@ -19,10 +19,10 @@ import (
 
 const (
 	defaultContainerdPath = "/run/containerd/containerd.sock"
-	containerdDaemonName = "containerd"
+	containerdDaemonName  = "containerd"
 )
 
-var containerdProcNames = []string {
+var containerdProcNames = []string{
 	"containerd",
 	"containerd-shim",
 }

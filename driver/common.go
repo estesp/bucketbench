@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -8,9 +9,13 @@ import (
 // Type represents the know implementations of the driver interface
 type Type int
 
+const ContainerNamePrefix = "bb-ctr"
+
 const (
 	// DockerCLI represents the Docker CLI driver implementation
 	DockerCLI Type = iota
+	// Docker represents the Docker API driver implementation
+	Docker
 	// Runc represents the runc-based driver implementation
 	Runc
 	// Containerd represents the containerd-based driver implementation
@@ -103,12 +108,14 @@ type Driver interface {
 }
 
 // New creates a driver instance of a specific type
-func New(dtype Type, path string, logDriver string) (Driver, error) {
+func New(dtype Type, path string, logDriver string, logOpts map[string]string) (Driver, error) {
 	switch dtype {
 	case Runc:
 		return NewRuncDriver(path)
 	case DockerCLI:
-		return NewDockerCLIDriver(path, logDriver)
+		return NewDockerCLIDriver(path, logDriver, logOpts)
+	case Docker:
+		return NewDockerDriver(context.Background(), logDriver, logOpts)
 	case Containerd:
 		return NewContainerdDriver(path)
 	case Ctr:
@@ -128,6 +135,8 @@ func TypeToString(dtype Type) string {
 	switch dtype {
 	case DockerCLI:
 		driverType = "DockerCLI"
+	case Docker:
+		driverType = "Docker"
 	case Containerd:
 		driverType = "Containerd"
 	case Ctr:
@@ -148,6 +157,8 @@ func StringToType(dtype string) Type {
 	switch dtype {
 	case "DockerCLI":
 		driverType = DockerCLI
+	case "Docker":
+		driverType = Docker
 	case "Containerd":
 		driverType = Containerd
 	case "Ctr":

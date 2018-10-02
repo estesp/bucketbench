@@ -119,7 +119,7 @@ func runLimitTest() []float64 {
 	var rates []float64
 	// get thread limit stats
 	for i := 1; i <= defaultLimitThreads; i++ {
-		limit, _ := benches.New(benches.Limit, "")
+		limit, _ := benches.New(benches.Limit, "", nil)
 		limit.Init("", driver.Null, "", "", "", trace)
 		limit.Run(i, defaultLimitIter, nil)
 		duration := limit.Elapsed()
@@ -140,7 +140,7 @@ func runBenchmark(benchType benches.Type, driverConfig benches.DriverConfig, ben
 	stats = make([][]benches.RunStatistics, driverConfig.Threads)
 
 	for i := 1; i <= driverConfig.Threads; i++ {
-		bench, _ := benches.New(benchType, driverConfig.LogDriver)
+		bench, _ := benches.New(benchType, driverConfig.LogDriver, driverConfig.LogOpts)
 		imageInfo := benchmark.Image
 		if driverType == driver.Runc || driverType == driver.Ctr {
 			// legacy ctr mode and runc drivers need an exploded rootfs
@@ -392,7 +392,7 @@ func parseStats(statistics []benches.RunStatistics) map[string]statResults {
 	}
 	for i := 0; i < iterations; i++ {
 		for key, duration := range statistics[i].Durations {
-			durationSeq[key] = append(durationSeq[key], float64(duration.Nanoseconds() / int64(time.Millisecond)))
+			durationSeq[key] = append(durationSeq[key], float64(duration.Nanoseconds()/int64(time.Millisecond)))
 		}
 		for key, errors := range statistics[i].Errors {
 			errorSeq[key] = append(errorSeq[key], errors)

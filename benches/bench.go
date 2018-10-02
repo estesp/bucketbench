@@ -31,13 +31,13 @@ type ProcMetrics struct {
 // Benchmark is the object form of a YAML-defined custom benchmark
 // used to define the specific operations to perform
 type Benchmark struct {
-	Name       string
-	Image      string
-	Command    string // optionally override the default image CMD/ENTRYPOINT
-	RootFs     string
-	Detached   bool
-	Drivers    []DriverConfig
-	Commands   []string
+	Name     string
+	Image    string
+	Command  string // optionally override the default image CMD/ENTRYPOINT
+	RootFs   string
+	Detached bool
+	Drivers  []DriverConfig
+	Commands []string
 }
 
 // DriverConfig contains the YAML-defined parameters for running a
@@ -47,7 +47,8 @@ type DriverConfig struct {
 	ClientPath string // optional path to specific client binary/socket
 	Threads    int
 	Iterations int
-	LogDriver  string
+	LogDriver  string            `yaml:"logDriver"`
+	LogOpts    map[string]string `yaml:"logOpts"`
 }
 
 // State constants
@@ -104,8 +105,8 @@ type Bench interface {
 }
 
 // New creates an instance of the selected benchmark type
-func New(btype Type, logDriver string) (Bench, error) {
-	switch btype {
+func New(benchType Type, logDriver string, logOpts map[string]string) (Bench, error) {
+	switch benchType {
 	case Limit:
 		return &LimitBench{
 			state: Created,
@@ -119,8 +120,9 @@ func New(btype Type, logDriver string) (Bench, error) {
 		bench := &OverheadBench{}
 		bench.state = Created
 		bench.logDriver = logDriver
+		bench.logOpts = logOpts
 		return bench, nil
 	default:
-		return nil, fmt.Errorf("no such benchmark type: %v", btype)
+		return nil, fmt.Errorf("no such benchmark type: %v", benchType)
 	}
 }

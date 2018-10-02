@@ -3,19 +3,16 @@ package driver
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/estesp/bucketbench/utils"
-	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
 const defaultDockerBinary = "docker"
 
-var dockerProcNames = []string {
+var dockerProcNames = []string{
 	"dockerd",
 	"docker-containerd",
 	"docker-containerd-shim",
@@ -29,6 +26,7 @@ type DockerCLIDriver struct {
 	dockerBinary string
 	dockerInfo   string
 	logDriver    string
+	logOpts      map[string]string
 }
 
 // DockerContainer is an implementation of the container metadata needed for docker
@@ -41,7 +39,7 @@ type DockerContainer struct {
 }
 
 // NewDockerCLIDriver creates an instance of the docker driver, providing a path to the docker client binary
-func NewDockerCLIDriver(binaryPath string, logDriver string) (Driver, error) {
+func NewDockerCLIDriver(binaryPath string, logDriver string, logOpts map[string]string) (Driver, error) {
 	if binaryPath == "" {
 		binaryPath = defaultDockerBinary
 	}
@@ -54,6 +52,7 @@ func NewDockerCLIDriver(binaryPath string, logDriver string) (Driver, error) {
 	driver := &DockerCLIDriver{
 		dockerBinary: resolvedBinPath,
 		logDriver:    logDriver,
+		logOpts:      logOpts,
 	}
 
 	info, err := driver.Info()
@@ -126,12 +125,7 @@ func (d *DockerCLIDriver) Close() error {
 }
 
 func (d *DockerCLIDriver) PID() (int, error) {
-	buf, err := ioutil.ReadFile("/var/run/docker.pid")
-	if err != nil {
-		return 0, errors.Wrap(err, "could not read Docker pid file")
-	}
-
-	return strconv.Atoi(string(buf))
+	return getDockerPID("")
 }
 
 // Wait will block until container stop
@@ -165,7 +159,7 @@ func (d *DockerCLIDriver) Create(name, image, cmdOverride string, detached bool,
 func (d *DockerCLIDriver) Clean() error {
 	// clean up any containers from a prior run
 	log.Info("Docker: Stopping any running containers created during bucketbench runs")
-	cmd := "docker stop `docker ps -qf name=bb-ctr-`"
+	cmd := fmt.Sprintf("docker stop `docker ps -qf name=%s`", ContainerNamePrefix)
 	out, err := utils.ExecShellCmd(cmd)
 	if err != nil {
 		// first make sure the error isn't simply that there were no
@@ -175,7 +169,7 @@ func (d *DockerCLIDriver) Clean() error {
 		}
 	}
 	log.Info("Docker: Removing exited containers from bucketbench runs")
-	cmd = "docker rm -f `docker ps -aqf name=bb-ctr-`"
+	cmd = fmt.Sprintf("docker rm -f `docker ps -aqf name=%s`", ContainerNamePrefix)
 	out, err = utils.ExecShellCmd(cmd)
 	if err != nil {
 		// first make sure the error isn't simply that there were no
@@ -197,6 +191,10 @@ func (d *DockerCLIDriver) Run(ctr Container) (string, time.Duration, error) {
 
 	if d.logDriver != "" {
 		args = append(args, "--log-driver", d.logDriver)
+
+		for name, value := range d.logOpts {
+			args = append(args, "--log-opt", fmt.Sprintf("%s=%s", name, value))
+		}
 	}
 
 	args = append(args, "--name", ctr.Name(), ctr.Image())

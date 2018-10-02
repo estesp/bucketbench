@@ -10,7 +10,7 @@ import (
 
 const (
 	procMetricsSampleInterval = 500 * time.Millisecond
-	bytesInMiB = 1024 * 1024
+	bytesInMiB                = 1024 * 1024
 )
 
 type OverheadBench struct {

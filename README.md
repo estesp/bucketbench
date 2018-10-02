@@ -96,6 +96,8 @@ Each driver has the following settings:
  - **clientpath**: *[Optional]* Path to the binary for client executable based drivers. In the case of containerd 1.0 and the CRI driver, this will be the unique UNIX socket path of the gRPC server. For client binary-based drivers, the driver will default to the standard binary name found in the current `$PATH`
  - **threads**: Integer number of concurrent threads to run. The `bucketbench` method is to execute 1..n runs, where `n` is the number of threads and each run adds another concurrent thread. **Run 1** only has one thread and **Run N** will have `n` concurrent threads.
  - **iterations**: Number of containers to create in each thread and execute the listed commands against.
+ - **logDriver**: `Docker` and `DockerCLI` support log driver configuration to measure overhead between different implementations. Allowed values can be found [here](https://docs.docker.com/config/containers/logging/configure/#supported-logging-drivers).
+ - **logOpts**: logger driver configuration, only used with `logDriver` option. See `overhead-logdriver.yaml` for examples.
 
 #### Command List
 
