@@ -1,6 +1,7 @@
 package benches
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -77,16 +78,16 @@ type Bench interface {
 
 	// Init initializes the benchmark (for example, verifies a daemon is running for daemon-centric
 	// engines, pre-pulls images, etc.)
-	Init(name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error
+	Init(ctx context.Context, name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error
 
 	// Validates the any condition that need to be checked before actual banchmark run.
 	// Helpful in testing operations required in benchmark for single run.
-	Validate() error
+	Validate(ctx context.Context) error
 
 	// Run executes the specified # of iterations against a specified # of
 	// threads per benchmark against a specific engine driver type and collects
 	// the statistics of each iteration and thread
-	Run(threads, iterations int, commands []string) error
+	Run(ctx context.Context, threads, iterations int, commands []string) error
 
 	// Stats returns the statistics of the benchmark run
 	Stats() []RunStatistics

@@ -2,6 +2,7 @@ package driver
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -39,7 +40,7 @@ type DockerContainer struct {
 }
 
 // NewDockerCLIDriver creates an instance of the docker driver, providing a path to the docker client binary
-func NewDockerCLIDriver(binaryPath string, logDriver string, logOpts map[string]string) (Driver, error) {
+func NewDockerCLIDriver(ctx context.Context, binaryPath string, logDriver string, logOpts map[string]string) (Driver, error) {
 	if binaryPath == "" {
 		binaryPath = defaultDockerBinary
 	}
@@ -55,7 +56,7 @@ func NewDockerCLIDriver(binaryPath string, logDriver string, logOpts map[string]
 		logOpts:      logOpts,
 	}
 
-	info, err := driver.Info()
+	info, err := driver.Info(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -129,38 +130,39 @@ func (d *DockerCLIDriver) PID() (int, error) {
 }
 
 // Wait will block until container stop
-func (d *DockerCLIDriver) Wait(ctr Container) (string, time.Duration, error) {
-	return utils.ExecTimedCmd(d.dockerBinary, "wait "+ctr.Name())
+func (d *DockerCLIDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return utils.ExecTimedCmd(ctx, d.dockerBinary, "wait "+ctr.Name())
 }
 
 // Info returns
-func (d *DockerCLIDriver) Info() (string, error) {
+func (d *DockerCLIDriver) Info(ctx context.Context) (string, error) {
 	if d.dockerInfo != "" {
 		return d.dockerInfo, nil
 	}
 
 	infoStart := "docker driver (binary: " + d.dockerBinary + ")\n"
-	version, err := utils.ExecCmd(d.dockerBinary, "version")
-	info, err := utils.ExecCmd(d.dockerBinary, "info")
+	version, err := utils.ExecCmd(ctx, d.dockerBinary, "version")
+	info, err := utils.ExecCmd(ctx, d.dockerBinary, "info")
 	if err != nil {
-		return "", fmt.Errorf("Error trying to retrieve docker daemon info: %v", err)
+		return "", fmt.Errorf("error trying to retrieve docker daemon info: %v", err)
 	}
+
 	d.dockerInfo = infoStart + parseDaemonInfo(version, info)
 	return d.dockerInfo, nil
 }
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (d *DockerCLIDriver) Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+func (d *DockerCLIDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
 	return newDockerContainer(name, image, cmdOverride, detached, trace), nil
 }
 
 // Clean will clean the environment; removing any exited containers
-func (d *DockerCLIDriver) Clean() error {
+func (d *DockerCLIDriver) Clean(ctx context.Context) error {
 	// clean up any containers from a prior run
 	log.Info("Docker: Stopping any running containers created during bucketbench runs")
 	cmd := fmt.Sprintf("docker stop `docker ps -qf name=%s`", ContainerNamePrefix)
-	out, err := utils.ExecShellCmd(cmd)
+	out, err := utils.ExecShellCmd(ctx, cmd)
 	if err != nil {
 		// first make sure the error isn't simply that there were no
 		// containers to stop:
@@ -170,7 +172,7 @@ func (d *DockerCLIDriver) Clean() error {
 	}
 	log.Info("Docker: Removing exited containers from bucketbench runs")
 	cmd = fmt.Sprintf("docker rm -f `docker ps -aqf name=%s`", ContainerNamePrefix)
-	out, err = utils.ExecShellCmd(cmd)
+	out, err = utils.ExecShellCmd(ctx, cmd)
 	if err != nil {
 		// first make sure the error isn't simply that there were no
 		// exited containers to remove:
@@ -182,7 +184,7 @@ func (d *DockerCLIDriver) Clean() error {
 }
 
 // Run will execute a container using the driver
-func (d *DockerCLIDriver) Run(ctr Container) (string, time.Duration, error) {
+func (d *DockerCLIDriver) Run(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	args := []string{"run"}
 
 	if ctr.Detached() {
@@ -203,31 +205,31 @@ func (d *DockerCLIDriver) Run(ctr Container) (string, time.Duration, error) {
 		args = append(args, ctr.Command())
 	}
 
-	return utils.ExecTimedCmd(d.dockerBinary, strings.Join(args, " "))
+	return utils.ExecTimedCmd(ctx, d.dockerBinary, strings.Join(args, " "))
 }
 
 // Stop will stop/kill a container
-func (d *DockerCLIDriver) Stop(ctr Container) (string, time.Duration, error) {
-	return utils.ExecTimedCmd(d.dockerBinary, "kill "+ctr.Name())
+func (d *DockerCLIDriver) Stop(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return utils.ExecTimedCmd(ctx, d.dockerBinary, "kill "+ctr.Name())
 }
 
 // Remove will remove a container
-func (d *DockerCLIDriver) Remove(ctr Container) (string, time.Duration, error) {
-	return utils.ExecTimedCmd(d.dockerBinary, "rm "+ctr.Name())
+func (d *DockerCLIDriver) Remove(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return utils.ExecTimedCmd(ctx, d.dockerBinary, "rm "+ctr.Name())
 }
 
 // Pause will pause a container
-func (d *DockerCLIDriver) Pause(ctr Container) (string, time.Duration, error) {
-	return utils.ExecTimedCmd(d.dockerBinary, "pause "+ctr.Name())
+func (d *DockerCLIDriver) Pause(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return utils.ExecTimedCmd(ctx, d.dockerBinary, "pause "+ctr.Name())
 }
 
 // Unpause will unpause/resume a container
-func (d *DockerCLIDriver) Unpause(ctr Container) (string, time.Duration, error) {
-	return utils.ExecTimedCmd(d.dockerBinary, "unpause "+ctr.Name())
+func (d *DockerCLIDriver) Unpause(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return utils.ExecTimedCmd(ctx, d.dockerBinary, "unpause "+ctr.Name())
 }
 
-func (d *DockerCLIDriver) Metrics(ctr Container) (interface{}, error) {
-	output, err := utils.ExecCmd(d.dockerBinary, "stats --no-stream "+ctr.Name())
+func (d *DockerCLIDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
+	output, err := utils.ExecCmd(ctx, d.dockerBinary, "stats --no-stream "+ctr.Name())
 	return output, err
 }
 

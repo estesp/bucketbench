@@ -2,6 +2,7 @@ package driver
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -120,11 +121,11 @@ func (r *RuncDriver) PID() (int, error) {
 }
 
 // Wait will block until container stop
-func (r *RuncDriver) Wait(ctr Container) (string, time.Duration, error) {
+func (r *RuncDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	return "", 0, errors.New("not implemented")
 }
 
-func (r *RuncDriver) Metrics(ctr Container) (interface{}, error) {
+func (r *RuncDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -133,9 +134,9 @@ func (r *RuncDriver) ProcNames() []string {
 }
 
 // Info returns
-func (r *RuncDriver) Info() (string, error) {
+func (r *RuncDriver) Info(ctx context.Context) (string, error) {
 	info := "runc driver (binary: " + r.runcBinary + ")\n"
-	versionInfo, err := utils.ExecCmd(r.runcBinary, "--v")
+	versionInfo, err := utils.ExecCmd(ctx, r.runcBinary, "--v")
 	if err != nil {
 		return "", fmt.Errorf("Error trying to retrieve runc version info: %v", err)
 	}
@@ -144,14 +145,14 @@ func (r *RuncDriver) Info() (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (r *RuncDriver) Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+func (r *RuncDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
 	return newRuncContainer(name, image, detached, trace), nil
 }
 
 // Clean will clean the environment; removing any remaining containers in the runc metadata
-func (r *RuncDriver) Clean() error {
+func (r *RuncDriver) Clean(ctx context.Context) error {
 	var tries int
-	out, err := utils.ExecCmd(r.runcBinary, "list")
+	out, err := utils.ExecCmd(ctx, r.runcBinary, "list")
 	if err != nil {
 		return fmt.Errorf("Error getting runc list output: (err: %v) output: %s", err, out)
 	}
@@ -164,21 +165,21 @@ func (r *RuncDriver) Clean() error {
 			switch ctr.State() {
 			case "running":
 				log.Infof("Attempting stop and remove on container %q", ctr.Name())
-				r.Stop(ctr)
-				r.Remove(ctr)
+				r.Stop(ctx, ctr)
+				r.Remove(ctx, ctr)
 			case "paused":
 				log.Infof("Attempting unpause and removal of container %q", ctr.Name())
-				r.Unpause(ctr)
-				r.Remove(ctr)
+				r.Unpause(ctx, ctr)
+				r.Remove(ctx, ctr)
 			case "stopped":
 				log.Infof("Attempting remove of container %q", ctr.Name())
-				r.Remove(ctr)
+				r.Remove(ctx, ctr)
 			default:
 				log.Warnf("Unknown state %q for ctr %q", ctr.State(), ctr.Name())
 			}
 		}
 		tries++
-		out, err := utils.ExecCmd(r.runcBinary, "list")
+		out, err := utils.ExecCmd(ctx, r.runcBinary, "list")
 		if err != nil {
 			return fmt.Errorf("Error getting runc list output: %v", err)
 		}
@@ -194,7 +195,7 @@ func (r *RuncDriver) Clean() error {
 // device to runc. Detached daemon/server bundles should not need a tty; stdin/out/err of
 // the container will be ignored given this is for benchmarking not validating container
 // operation.
-func (r *RuncDriver) Run(ctr Container) (string, time.Duration, error) {
+func (r *RuncDriver) Run(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	var (
 		detached string
 		trace    string
@@ -208,27 +209,27 @@ func (r *RuncDriver) Run(ctr Container) (string, time.Duration, error) {
 
 	args := fmt.Sprintf("%srun %s --bundle %s %s", trace, detached, ctr.Image(), ctr.Name())
 	// the "NoOut" variant of ExecTimedCmd ignores stdin/out/err (sets them to /dev/null)
-	return utils.ExecTimedCmdNoOut(r.runcBinary, args)
+	return utils.ExecTimedCmdNoOut(ctx, r.runcBinary, args)
 }
 
 // Stop will stop/kill a container
-func (r *RuncDriver) Stop(ctr Container) (string, time.Duration, error) {
-	return utils.ExecTimedCmd(r.runcBinary, "kill "+ctr.Name()+" KILL")
+func (r *RuncDriver) Stop(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return utils.ExecTimedCmd(ctx, r.runcBinary, "kill "+ctr.Name()+" KILL")
 }
 
 // Remove will remove a container
-func (r *RuncDriver) Remove(ctr Container) (string, time.Duration, error) {
-	return utils.ExecTimedCmd(r.runcBinary, "delete "+ctr.Name())
+func (r *RuncDriver) Remove(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return utils.ExecTimedCmd(ctx, r.runcBinary, "delete "+ctr.Name())
 }
 
 // Pause will pause a container
-func (r *RuncDriver) Pause(ctr Container) (string, time.Duration, error) {
-	return utils.ExecTimedCmd(r.runcBinary, "pause "+ctr.Name())
+func (r *RuncDriver) Pause(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return utils.ExecTimedCmd(ctx, r.runcBinary, "pause "+ctr.Name())
 }
 
 // Unpause will unpause/resume a container
-func (r *RuncDriver) Unpause(ctr Container) (string, time.Duration, error) {
-	return utils.ExecTimedCmd(r.runcBinary, "resume "+ctr.Name())
+func (r *RuncDriver) Unpause(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return utils.ExecTimedCmd(ctx, r.runcBinary, "resume "+ctr.Name())
 }
 
 // take the output of "runc list" and parse into container instances

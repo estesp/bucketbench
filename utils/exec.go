@@ -3,6 +3,7 @@
 package utils
 
 import (
+	"context"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -26,9 +27,9 @@ func ResolveBinary(binname string) (string, error) {
 
 // ExecTimedCmdNoOut executes a command and returns any errors, but ignores output
 // This function also times the command and returns the elapsed milliseconds
-func ExecTimedCmdNoOut(cmd, args string) (string, time.Duration, error) {
+func ExecTimedCmdNoOut(ctx context.Context, cmd, args string) (string, time.Duration, error) {
 	start := time.Now()
-	execCmd := exec.Command(cmd, strings.Split(args, " ")...)
+	execCmd := exec.CommandContext(ctx, cmd, strings.Split(args, " ")...)
 	execCmd.Stdin = nil
 	execCmd.Stdout = nil
 	execCmd.Stderr = nil
@@ -39,25 +40,25 @@ func ExecTimedCmdNoOut(cmd, args string) (string, time.Duration, error) {
 
 // ExecTimedCmd executes a command and returns the combined err/out output and any errors
 // This function also times the command and returns the elapsed milliseconds
-func ExecTimedCmd(cmd, args string) (string, time.Duration, error) {
+func ExecTimedCmd(ctx context.Context, cmd, args string) (string, time.Duration, error) {
 	start := time.Now()
-	execCmd := exec.Command(cmd, strings.Split(args, " ")...)
+	execCmd := exec.CommandContext(ctx, cmd, strings.Split(args, " ")...)
 	out, err := execCmd.CombinedOutput()
 	elapsed := time.Since(start)
 	return string(out), elapsed, errors.Wrapf(err, "exec failed: %s %s", cmd, args)
 }
 
 // ExecCmd executes a command and returns the combined err/out output and any errors
-func ExecCmd(cmd, args string) (string, error) {
-	execCmd := exec.Command(cmd, strings.Split(args, " ")...)
+func ExecCmd(ctx context.Context, cmd, args string) (string, error) {
+	execCmd := exec.CommandContext(ctx, cmd, strings.Split(args, " ")...)
 	out, err := execCmd.CombinedOutput()
 	return string(out), errors.Wrapf(err, "exec failed: %s %s", cmd, args)
 }
 
 // ExecShellCmd executes a 'bash -c' process, with the passed-in command
 // handed to the -c flag of bash
-func ExecShellCmd(cmd string) (string, error) {
-	execCmd := exec.Command("bash", "-c", cmd)
+func ExecShellCmd(ctx context.Context, cmd string) (string, error) {
+	execCmd := exec.CommandContext(ctx, "bash", "-c", cmd)
 	out, err := execCmd.CombinedOutput()
 	return string(out), errors.Wrapf(err, "exec failed: %s", cmd)
 }

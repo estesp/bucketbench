@@ -1,6 +1,7 @@
 package benches
 
 import (
+	"context"
 	"sort"
 	"time"
 
@@ -17,7 +18,7 @@ type OverheadBench struct {
 	CustomBench
 }
 
-func (b *OverheadBench) Run(threads, iterations int, commands []string) error {
+func (b *OverheadBench) Run(ctx context.Context, threads, iterations int, commands []string) error {
 	pid, err := b.driver.PID()
 	if err != nil {
 		log.WithError(err).Errorf("could not find daemon with pid: %d", pid)
@@ -58,7 +59,7 @@ func (b *OverheadBench) Run(threads, iterations int, commands []string) error {
 		}
 	}()
 
-	err = b.CustomBench.Run(threads, iterations, commands)
+	err = b.CustomBench.Run(ctx, threads, iterations, commands)
 
 	// Stop gathering metrics
 	ticker.Stop()

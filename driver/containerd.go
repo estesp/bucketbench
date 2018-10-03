@@ -20,6 +20,7 @@ import (
 const (
 	defaultContainerdPath = "/run/containerd/containerd.sock"
 	containerdDaemonName  = "containerd"
+	containerdNamespace   = "bb"
 )
 
 var containerdProcNames = []string{
@@ -34,7 +35,6 @@ var containerdProcNames = []string{
 type ContainerdDriver struct {
 	ctrdAddress string
 	client      *containerd.Client
-	context     context.Context
 }
 
 // ContainerdContainer is an implementation of the container metadata needed for containerd
@@ -48,20 +48,21 @@ type ContainerdContainer struct {
 }
 
 // NewContainerdDriver creates an instance of the containerd driver, providing a path to the ctr client
-func NewContainerdDriver(path string) (Driver, error) {
+func NewContainerdDriver(path string) (*ContainerdDriver, error) {
 	if path == "" {
 		path = defaultContainerdPath
 	}
+
 	client, err := containerd.New(path)
 	if err != nil {
 		return &ContainerdDriver{}, err
 	}
-	bbCtx := namespaces.WithNamespace(context.Background(), "bb")
+
 	driver := &ContainerdDriver{
 		ctrdAddress: path,
 		client:      client,
-		context:     bbCtx,
 	}
+
 	return driver, nil
 }
 
@@ -139,20 +140,21 @@ func (r *ContainerdDriver) PID() (int, error) {
 	return utils.FindPIDByName(containerdDaemonName)
 }
 
-func (r *ContainerdDriver) Wait(ctr Container) (string, time.Duration, error) {
+func (r *ContainerdDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
+	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
 
-	container, err := r.client.LoadContainer(r.context, ctr.Name())
+	container, err := r.client.LoadContainer(ctx, ctr.Name())
 	if err != nil {
 		return "", 0, err
 	}
 
-	task, err := container.Task(r.context, nil)
+	task, err := container.Task(ctx, nil)
 	if err != nil {
 		return "", 0, err
 	}
 
-	taskStatus, err := task.Status(r.context)
+	taskStatus, err := task.Status(ctx)
 	if err != nil {
 		return "", 0, err
 	}
@@ -161,7 +163,7 @@ func (r *ContainerdDriver) Wait(ctr Container) (string, time.Duration, error) {
 		return "", 0, fmt.Errorf("task with pid %d is not running", task.Pid())
 	}
 
-	statusC, err := task.Wait(r.context)
+	statusC, err := task.Wait(ctx)
 	if err != nil {
 		return "", 0, err
 	}
@@ -176,18 +178,20 @@ func (r *ContainerdDriver) ProcNames() []string {
 	return containerdProcNames
 }
 
-func (r *ContainerdDriver) Metrics(ctr Container) (interface{}, error) {
-	container, err := r.client.LoadContainer(r.context, ctr.Name())
+func (r *ContainerdDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
+	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
+
+	container, err := r.client.LoadContainer(ctx, ctr.Name())
 	if err != nil {
 		return nil, err
 	}
 
-	task, err := container.Task(r.context, nil)
+	task, err := container.Task(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	metrics, err := task.Metrics(r.context)
+	metrics, err := task.Metrics(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -196,37 +200,44 @@ func (r *ContainerdDriver) Metrics(ctr Container) (interface{}, error) {
 }
 
 // Info returns
-func (r *ContainerdDriver) Info() (string, error) {
-	version, err := r.client.Version(r.context)
+func (r *ContainerdDriver) Info(ctx context.Context) (string, error) {
+	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
+
+	version, err := r.client.Version(ctx)
 	if err != nil {
 		return "", err
 	}
-	info := "containerd gRPC client driver (daemon: " + version.Version + "[Revision: " + version.Revision + "] )"
-	return info, nil
+
+	return fmt.Sprintf("containerd gRPC client driver (daemon: '%s', revision: '%s')", version.Version, version.Revision), nil
 }
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (r *ContainerdDriver) Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+func (r *ContainerdDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
+
 	// we need to convert the bare Docker image name to a fully resolved
 	// reference (since the Docker driver and containerd driver share image
 	// name references)
 	fullImageName := resolveDockerImageName(image)
-	if _, err := r.client.GetImage(r.context, fullImageName); err != nil {
+	if _, err := r.client.GetImage(ctx, fullImageName); err != nil {
 		// if the image isn't already in our namespaced context, then pull it
 		// using the reference and default resolver (most likely DockerHub)
-		if _, err := r.client.Pull(r.context, fullImageName, containerd.WithPullUnpack); err != nil {
+		if _, err := r.client.Pull(ctx, fullImageName, containerd.WithPullUnpack); err != nil {
 			// error pulling the image
 			return nil, err
 		}
 	}
+
 	return newContainerdContainer(name, fullImageName, cmdOverride, trace), nil
 }
 
 // Clean will clean the environment; removing any remaining containers in the runc metadata
-func (r *ContainerdDriver) Clean() error {
+func (r *ContainerdDriver) Clean(ctx context.Context) error {
+	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
+
 	var tries int
-	list, err := r.client.Containers(r.context)
+	list, err := r.client.Containers(ctx)
 	if err != nil {
 		return fmt.Errorf("Error getting containerd list output: %v", err)
 	}
@@ -236,15 +247,15 @@ func (r *ContainerdDriver) Clean() error {
 		log.Infof("containerd cleanup: Pass #%d", tries+1)
 		// kill/stop and remove containers
 		for _, ctr := range list {
-			if err := stopTask(r.context, ctr); err != nil {
+			if err := stopTask(ctx, ctr); err != nil {
 				log.Errorf("Error stopping container: %v", err)
 			}
-			if err := ctr.Delete(r.context, containerd.WithSnapshotCleanup); err != nil {
+			if err := ctr.Delete(ctx, containerd.WithSnapshotCleanup); err != nil {
 				log.Errorf("Error deleting container %v", err)
 			}
 		}
 		tries++
-		list, err = r.client.Containers(r.context)
+		list, err = r.client.Containers(ctx)
 		if err != nil {
 			return fmt.Errorf("Error getting containerd list output: %v", err)
 		}
@@ -254,21 +265,23 @@ func (r *ContainerdDriver) Clean() error {
 }
 
 // Run will execute a container using the containerd driver.
-func (r *ContainerdDriver) Run(ctr Container) (string, time.Duration, error) {
+func (r *ContainerdDriver) Run(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
-	image, err := r.client.GetImage(r.context, ctr.Image())
+	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
+
+	image, err := r.client.GetImage(ctx, ctr.Image())
 	if err != nil {
 		return "", 0, err
 	}
 	var container containerd.Container
 	if ctr.Command() != "" {
 		// the command needs to be overridden in the generated spec
-		container, err = r.client.NewContainer(r.context, ctr.Name(),
+		container, err = r.client.NewContainer(ctx, ctr.Name(),
 			containerd.WithNewSpec(oci.WithImageConfig(image),
 				oci.WithProcessArgs(strings.Split(ctr.Command(), " ")...)),
 			containerd.WithNewSnapshot(ctr.Name(), image))
 	} else {
-		container, err = r.client.NewContainer(r.context, ctr.Name(),
+		container, err = r.client.NewContainer(ctx, ctr.Name(),
 			containerd.WithNewSpec(oci.WithImageConfig(image)),
 			containerd.WithNewSnapshot(ctr.Name(), image))
 	}
@@ -277,12 +290,12 @@ func (r *ContainerdDriver) Run(ctr Container) (string, time.Duration, error) {
 	}
 
 	stdouterr := bytes.NewBuffer(nil)
-	task, err := container.NewTask(r.context, cio.NewIO(bytes.NewBuffer(nil), stdouterr, stdouterr))
+	task, err := container.NewTask(ctx, cio.NewIO(bytes.NewBuffer(nil), stdouterr, stdouterr))
 	if err != nil {
 		return "", 0, err
 	}
-	if err := task.Start(r.context); err != nil {
-		task.Delete(r.context)
+	if err := task.Start(ctx); err != nil {
+		task.Delete(ctx)
 		return "", 0, err
 	}
 	elapsed := time.Since(start)
@@ -291,13 +304,16 @@ func (r *ContainerdDriver) Run(ctr Container) (string, time.Duration, error) {
 
 // Stop will stop/kill a container (specifically, the tasks [processes]
 // running in the container)
-func (r *ContainerdDriver) Stop(ctr Container) (string, time.Duration, error) {
+func (r *ContainerdDriver) Stop(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
-	container, err := r.client.LoadContainer(r.context, ctr.Name())
+	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
+
+	container, err := r.client.LoadContainer(ctx, ctr.Name())
 	if err != nil {
 		return "", 0, err
 	}
-	if err = stopTask(r.context, container); err != nil {
+
+	if err = stopTask(ctx, container); err != nil {
 		// ignore if the error is that the process had already exited:
 		if !strings.Contains(err.Error(), "not found") {
 			return "", 0, err
@@ -309,18 +325,20 @@ func (r *ContainerdDriver) Stop(ctr Container) (string, time.Duration, error) {
 
 // Remove will remove a container; in the containerd case we simply call kill
 // which will remove any container metadata if it was running
-func (r *ContainerdDriver) Remove(ctr Container) (string, time.Duration, error) {
+func (r *ContainerdDriver) Remove(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
-	container, err := r.client.LoadContainer(r.context, ctr.Name())
+	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
+
+	container, err := r.client.LoadContainer(ctx, ctr.Name())
 	if err != nil {
 		return "", 0, err
 	}
 
-	if err = stopTask(r.context, container); err != nil {
+	if err = stopTask(ctx, container); err != nil {
 		return "", 0, err
 	}
 
-	err = container.Delete(r.context, containerd.WithSnapshotCleanup)
+	err = container.Delete(ctx, containerd.WithSnapshotCleanup)
 	if err != nil {
 		return "", 0, err
 	}
@@ -330,17 +348,17 @@ func (r *ContainerdDriver) Remove(ctr Container) (string, time.Duration, error) 
 }
 
 // Pause will pause a container
-func (r *ContainerdDriver) Pause(ctr Container) (string, time.Duration, error) {
+func (r *ContainerdDriver) Pause(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
-	container, err := r.client.LoadContainer(r.context, ctr.Name())
+	container, err := r.client.LoadContainer(ctx, ctr.Name())
 	if err != nil {
 		return "", 0, err
 	}
-	task, err := container.Task(r.context, nil)
+	task, err := container.Task(ctx, nil)
 	if err != nil {
 		return "", 0, err
 	}
-	err = task.Pause(r.context)
+	err = task.Pause(ctx)
 	if err != nil {
 		return "", 0, err
 	}
@@ -349,17 +367,19 @@ func (r *ContainerdDriver) Pause(ctr Container) (string, time.Duration, error) {
 }
 
 // Unpause will unpause/resume a container
-func (r *ContainerdDriver) Unpause(ctr Container) (string, time.Duration, error) {
+func (r *ContainerdDriver) Unpause(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
-	container, err := r.client.LoadContainer(r.context, ctr.Name())
+	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
+
+	container, err := r.client.LoadContainer(ctx, ctr.Name())
 	if err != nil {
 		return "", 0, err
 	}
-	task, err := container.Task(r.context, nil)
+	task, err := container.Task(ctx, nil)
 	if err != nil {
 		return "", 0, err
 	}
-	err = task.Resume(r.context)
+	err = task.Resume(ctx)
 	if err != nil {
 		return "", 0, err
 	}

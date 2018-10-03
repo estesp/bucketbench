@@ -15,10 +15,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
+	"os/signal"
 	"text/tabwriter"
 	"time"
 
@@ -60,6 +62,20 @@ var runCmd = &cobra.Command{
 lifecycle container commands to run against which container runtimes, specifying
 iterations and number of concurrent threads. Results will be displayed afterwards.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		stopC := make(chan os.Signal, 1)
+		signal.Notify(stopC, os.Interrupt, os.Kill)
+
+		go func() {
+			select {
+			case <-stopC:
+				cancel()
+			case <- ctx.Done():
+				return
+			}
+		}()
 
 		if yamlFile == "" {
 			return fmt.Errorf("No YAML file provided with --benchmark/-b; nothing to do")
@@ -81,7 +97,7 @@ iterations and number of concurrent threads. Results will be displayed afterward
 		)
 		if !skipLimit {
 			// get thread limit stats
-			limitRates := runLimitTest()
+			limitRates := runLimitTest(ctx)
 			limitResult := benchResult{
 				name:        limitBenchmarkName,
 				threads:     defaultLimitThreads,
@@ -99,7 +115,7 @@ iterations and number of concurrent threads. Results will be displayed afterward
 		}
 
 		for _, driverEntry := range benchmark.Drivers {
-			result, err := runBenchmark(benchType, driverEntry, benchmark)
+			result, err := runBenchmark(ctx, benchType, driverEntry, benchmark)
 			if err != nil {
 				return err
 			}
@@ -115,13 +131,13 @@ iterations and number of concurrent threads. Results will be displayed afterward
 	},
 }
 
-func runLimitTest() []float64 {
+func runLimitTest(ctx context.Context) []float64 {
 	var rates []float64
 	// get thread limit stats
 	for i := 1; i <= defaultLimitThreads; i++ {
 		limit, _ := benches.New(benches.Limit, "", nil)
-		limit.Init("", driver.Null, "", "", "", trace)
-		limit.Run(i, defaultLimitIter, nil)
+		limit.Init(ctx, "", driver.Null, "", "", "", trace)
+		limit.Run(ctx, i, defaultLimitIter, nil)
 		duration := limit.Elapsed()
 		rate := float64(i*defaultLimitIter) / duration.Seconds()
 		rates = append(rates, rate)
@@ -130,7 +146,7 @@ func runLimitTest() []float64 {
 	return rates
 }
 
-func runBenchmark(benchType benches.Type, driverConfig benches.DriverConfig, benchmark benches.Benchmark) (benchResult, error) {
+func runBenchmark(ctx context.Context, benchType benches.Type, driverConfig benches.DriverConfig, benchmark benches.Benchmark) (benchResult, error) {
 	var (
 		rates     []float64
 		stats     [][]benches.RunStatistics
@@ -150,15 +166,15 @@ func runBenchmark(benchType benches.Type, driverConfig benches.DriverConfig, ben
 			}
 			imageInfo = benchmark.RootFs
 		}
-		err := bench.Init(benchmark.Name, driverType, driverConfig.ClientPath, imageInfo, benchmark.Command, trace)
+		err := bench.Init(ctx, benchmark.Name, driverType, driverConfig.ClientPath, imageInfo, benchmark.Command, trace)
 		if err != nil {
 			return benchResult{}, err
 		}
 		benchInfo = bench.Info()
-		if err = bench.Validate(); err != nil {
+		if err = bench.Validate(ctx); err != nil {
 			return benchResult{}, fmt.Errorf("Error during bench validate: %v", err)
 		}
-		err = bench.Run(i, driverConfig.Iterations, benchmark.Commands)
+		err = bench.Run(ctx, i, driverConfig.Iterations, benchmark.Commands)
 		if err != nil {
 			return benchResult{}, fmt.Errorf("Error during bench run: %v", err)
 		}

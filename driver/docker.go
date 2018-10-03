@@ -22,7 +22,6 @@ const (
 
 // DockerDriver is an implementation of the driver interface for the Docker engine using API
 type DockerDriver struct {
-	ctx       context.Context
 	client    *docker.Client
 	logConfig *container.LogConfig
 }
@@ -43,7 +42,6 @@ func NewDockerDriver(ctx context.Context, logDriver string, logOpts map[string]s
 	client.NegotiateAPIVersionPing(ping)
 
 	driver := &DockerDriver{
-		ctx:    ctx,
 		client: client,
 	}
 
@@ -62,8 +60,9 @@ func (d *DockerDriver) Type() Type {
 }
 
 // Info returns a short description about the docker server
-func (d *DockerDriver) Info() (string, error) {
-	info, err := d.client.Info(d.ctx)
+func (d *DockerDriver) Info(ctx context.Context) (string, error) {
+	info, err := d.client.Info(ctx)
+
 	if err != nil {
 		return "", errors.Wrap(err, "failed to query Docker info")
 	}
@@ -75,18 +74,19 @@ func (d *DockerDriver) Path() string {
 	return ""
 }
 
-func (d *DockerDriver) Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+// Clean removes used Docker containers
+func (d *DockerDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
 	return newDockerContainer(name, image, cmdOverride, detached, trace), nil
 }
 
 // Clean removes used Docker containers
-func (d *DockerDriver) Clean() error {
+func (d *DockerDriver) Clean(ctx context.Context) error {
 	listOpts := types.ContainerListOptions{
 		All:     true,
 		Filters: filters.NewArgs(filters.Arg("name", ContainerNamePrefix)),
 	}
 
-	containers, err := d.client.ContainerList(d.ctx, listOpts)
+	containers, err := d.client.ContainerList(ctx, listOpts)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func (d *DockerDriver) Clean() error {
 			Force: true,
 		}
 
-		if err := d.client.ContainerRemove(d.ctx, instance.ID, rmOpts); err != nil {
+		if err := d.client.ContainerRemove(ctx, instance.ID, rmOpts); err != nil {
 			return errors.Wrapf(err, "failed to remove instance with id '%s'", instance.ID)
 		}
 	}
@@ -105,7 +105,7 @@ func (d *DockerDriver) Clean() error {
 }
 
 // Run creates a new Docker container and sends a request to the daemon to start it
-func (d *DockerDriver) Run(ctr Container) (string, time.Duration, error) {
+func (d *DockerDriver) Run(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 
 	var config container.Config
@@ -121,12 +121,12 @@ func (d *DockerDriver) Run(ctr Container) (string, time.Duration, error) {
 		hostConfig.LogConfig = *d.logConfig
 	}
 
-	if _, err := d.client.ContainerCreate(d.ctx, &config, &hostConfig, nil, ctr.Name()); err != nil {
+	if _, err := d.client.ContainerCreate(ctx, &config, &hostConfig, nil, ctr.Name()); err != nil {
 		return "", 0, errors.Wrapf(err, "couldn't create container '%s'", ctr.Name())
 	}
 
 	opts := types.ContainerStartOptions{}
-	if err := d.client.ContainerStart(d.ctx, ctr.Name(), opts); err != nil {
+	if err := d.client.ContainerStart(ctx, ctr.Name(), opts); err != nil {
 		return "", 0, errors.Wrapf(err, "failed to start container '%s'", ctr.Name())
 	}
 
@@ -134,11 +134,11 @@ func (d *DockerDriver) Run(ctr Container) (string, time.Duration, error) {
 }
 
 // Stop stops a container
-func (d *DockerDriver) Stop(ctr Container) (string, time.Duration, error) {
+func (d *DockerDriver) Stop(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 
 	timeout := dockerContainerStopTimeout
-	if err := d.client.ContainerStop(d.ctx, ctr.Name(), &timeout); err != nil {
+	if err := d.client.ContainerStop(ctx, ctr.Name(), &timeout); err != nil {
 		return "", 0, errors.Wrapf(err, "failed to stop container '%s'", ctr.Name())
 	}
 
@@ -146,11 +146,11 @@ func (d *DockerDriver) Stop(ctr Container) (string, time.Duration, error) {
 }
 
 // Remove kills and removes a container
-func (d *DockerDriver) Remove(ctr Container) (string, time.Duration, error) {
+func (d *DockerDriver) Remove(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 
 	opts := types.ContainerRemoveOptions{Force: true}
-	if err := d.client.ContainerRemove(d.ctx, ctr.Name(), opts); err != nil {
+	if err := d.client.ContainerRemove(ctx, ctr.Name(), opts); err != nil {
 		return "", 0, errors.Wrapf(err, "failed to remove container: '%s'", ctr.Name())
 	}
 
@@ -158,10 +158,10 @@ func (d *DockerDriver) Remove(ctr Container) (string, time.Duration, error) {
 }
 
 // Pause pauses a container
-func (d *DockerDriver) Pause(ctr Container) (string, time.Duration, error) {
+func (d *DockerDriver) Pause(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 
-	if err := d.client.ContainerPause(d.ctx, ctr.Name()); err != nil {
+	if err := d.client.ContainerPause(ctx, ctr.Name()); err != nil {
 		return "", 0, nil
 	}
 
@@ -169,10 +169,10 @@ func (d *DockerDriver) Pause(ctr Container) (string, time.Duration, error) {
 }
 
 // Unpause unpauses a container
-func (d *DockerDriver) Unpause(ctr Container) (string, time.Duration, error) {
+func (d *DockerDriver) Unpause(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 
-	if err := d.client.ContainerUnpause(d.ctx, ctr.Name()); err != nil {
+	if err := d.client.ContainerUnpause(ctx, ctr.Name()); err != nil {
 		return "", 0, errors.Wrapf(err, "failed to unpause container: '%s'", ctr.Name())
 	}
 
@@ -180,10 +180,10 @@ func (d *DockerDriver) Unpause(ctr Container) (string, time.Duration, error) {
 }
 
 // Wait will block until container stop
-func (d *DockerDriver) Wait(ctr Container) (string, time.Duration, error) {
+func (d *DockerDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 
-	waitC, errC := d.client.ContainerWait(d.ctx, ctr.Name(), container.WaitConditionNotRunning)
+	waitC, errC := d.client.ContainerWait(ctx, ctr.Name(), container.WaitConditionNotRunning)
 
 	select {
 	case err := <-errC:
@@ -207,8 +207,8 @@ func (d *DockerDriver) ProcNames() []string {
 	return dockerProcNames
 }
 
-func (d *DockerDriver) Metrics(ctr Container) (interface{}, error) {
-	stats, err := d.client.ContainerStats(d.ctx, ctr.Name(), false)
+func (d *DockerDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
+	stats, err := d.client.ContainerStats(ctx, ctr.Name(), false)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get stats for container: '%s'", ctr.Name())
 	}
