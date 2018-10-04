@@ -136,10 +136,12 @@ func (r *ContainerdDriver) Close() error {
 	return r.client.Close()
 }
 
+// PID returns containerd process id
 func (r *ContainerdDriver) PID() (int, error) {
 	return utils.FindPIDByName(containerdDaemonName)
 }
 
+// Wait blocks thread until container stop
 func (r *ContainerdDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
@@ -174,10 +176,12 @@ func (r *ContainerdDriver) Wait(ctx context.Context, ctr Container) (string, tim
 	return "", elapsed, nil
 }
 
+// ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
 func (r *ContainerdDriver) ProcNames() []string {
 	return containerdProcNames
 }
 
+// Metrics returns stats data from daemon for container
 func (r *ContainerdDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
 	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
 
@@ -350,6 +354,8 @@ func (r *ContainerdDriver) Remove(ctx context.Context, ctr Container) (string, t
 // Pause will pause a container
 func (r *ContainerdDriver) Pause(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
+	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
+
 	container, err := r.client.LoadContainer(ctx, ctr.Name())
 	if err != nil {
 		return "", 0, err

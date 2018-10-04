@@ -9,6 +9,7 @@ import (
 // Type represents the know implementations of the driver interface
 type Type int
 
+// ContainerNamePrefix represents containers name prefix
 const ContainerNamePrefix = "bb-ctr"
 
 const (
@@ -104,6 +105,7 @@ type Driver interface {
 	// ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
 	ProcNames() []string
 
+	// Metrics returns stats data from daemon for container
 	Metrics(ctx context.Context, ctr Container) (interface{}, error)
 }
 

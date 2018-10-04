@@ -24,6 +24,7 @@ type RunStatistics struct {
 	Daemon    *ProcMetrics
 }
 
+// ProcMetrics represents stats sample from daemon
 type ProcMetrics struct {
 	Mem uint64
 	CPU float64

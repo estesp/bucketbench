@@ -115,18 +115,22 @@ func (r *CtrDriver) Close() error {
 	return nil
 }
 
+// PID returns containerd process id
 func (r *CtrDriver) PID() (int, error) {
 	return 0, errors.New("not implemented")
 }
 
+// Wait blocks thread until container stop
 func (r *CtrDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	return "", 0, errors.New("not implemented")
 }
 
+// Metrics returns stats data from daemon for container
 func (r *CtrDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
 	return nil, errors.New("not implemented")
 }
 
+// ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
 func (r *CtrDriver) ProcNames() []string {
 	return containerdProcNames
 }

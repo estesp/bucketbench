@@ -296,18 +296,22 @@ func (c *CRIDriver) Close() error {
 	return nil
 }
 
+// PID returns daemon process id
 func (c *CRIDriver) PID() (int, error) {
 	return 0, errors.New("not implemented")
 }
 
+// Wait blocks thread until container stop
 func (c *CRIDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	return "", 0, errors.New("not implemented")
 }
 
+// Metrics returns stats data from daemon for container
 func (c *CRIDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
 	return nil, errors.New("not implemented")
 }
 
+// ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
 func (c *CRIDriver) ProcNames() []string {
 	return []string{}
 }

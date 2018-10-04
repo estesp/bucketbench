@@ -14,10 +14,13 @@ const (
 	bytesInMiB                = 1024 * 1024
 )
 
+// OverheadBench runs CustomBench benchmarks and measure memory and cpu usage of a container daemon
 type OverheadBench struct {
 	CustomBench
 }
 
+// Run executes the benchmark iterations against a specific engine driver type
+// for a specified number of iterations
 func (b *OverheadBench) Run(ctx context.Context, threads, iterations int, commands []string) error {
 	pid, err := b.driver.PID()
 	if err != nil {

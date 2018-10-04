@@ -8,11 +8,13 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
+// Proc represents a OS process
 type Proc struct {
 	proc *process.Process
 	list []string
 }
 
+// NewProcFromPID finds a process by process id
 func NewProcFromPID(pid int, procNames []string) (*Proc, error) {
 	p, err := process.NewProcess(int32(pid))
 	if err != nil {

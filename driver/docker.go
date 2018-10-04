@@ -55,6 +55,7 @@ func NewDockerDriver(ctx context.Context, logDriver string, logOpts map[string]s
 	return driver, nil
 }
 
+// Type returns a driver.Type to indentify the driver implementation
 func (d *DockerDriver) Type() Type {
 	return Docker
 }
@@ -62,7 +63,6 @@ func (d *DockerDriver) Type() Type {
 // Info returns a short description about the docker server
 func (d *DockerDriver) Info(ctx context.Context) (string, error) {
 	info, err := d.client.Info(ctx)
-
 	if err != nil {
 		return "", errors.Wrap(err, "failed to query Docker info")
 	}
@@ -70,11 +70,13 @@ func (d *DockerDriver) Info(ctx context.Context) (string, error) {
 	return fmt.Sprintf("Docker API (name: '%s', driver: '%s', version: '%s')", info.Name, info.Driver, info.ServerVersion), nil
 }
 
+// Path returns the binary (or socket) path related to the runtime in use
 func (d *DockerDriver) Path() string {
 	return ""
 }
 
-// Clean removes used Docker containers
+// Create will create a container instance matching the specific needs
+// of a driver
 func (d *DockerDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
 	return newDockerContainer(name, image, cmdOverride, detached, trace), nil
 }
@@ -203,10 +205,12 @@ func (d *DockerDriver) PID() (int, error) {
 	return getDockerPID("")
 }
 
+// ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
 func (d *DockerDriver) ProcNames() []string {
 	return dockerProcNames
 }
 
+// Metrics returns stats data from daemon for container
 func (d *DockerDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
 	stats, err := d.client.ContainerStats(ctx, ctr.Name(), false)
 	if err != nil {

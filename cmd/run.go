@@ -72,7 +72,7 @@ iterations and number of concurrent threads. Results will be displayed afterward
 			select {
 			case <-stopC:
 				cancel()
-			case <- ctx.Done():
+			case <-ctx.Done():
 				return
 			}
 		}()

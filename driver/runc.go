@@ -116,6 +116,7 @@ func (r *RuncDriver) Close() error {
 	return nil
 }
 
+// PID returns daemon process id
 func (r *RuncDriver) PID() (int, error) {
 	return 0, errors.New("not implemented")
 }
@@ -125,10 +126,12 @@ func (r *RuncDriver) Wait(ctx context.Context, ctr Container) (string, time.Dura
 	return "", 0, errors.New("not implemented")
 }
 
+// Metrics returns stats data from daemon for container
 func (r *RuncDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
 	return nil, errors.New("not implemented")
 }
 
+// ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
 func (r *RuncDriver) ProcNames() []string {
 	return []string{}
 }

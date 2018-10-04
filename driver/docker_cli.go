@@ -125,6 +125,7 @@ func (d *DockerCLIDriver) Close() error {
 	return nil
 }
 
+// PID returns a process ID of Docker daemon
 func (d *DockerCLIDriver) PID() (int, error) {
 	return getDockerPID("")
 }
@@ -228,11 +229,13 @@ func (d *DockerCLIDriver) Unpause(ctx context.Context, ctr Container) (string, t
 	return utils.ExecTimedCmd(ctx, d.dockerBinary, "unpause "+ctr.Name())
 }
 
+// Metrics returns stats data from daemon for container
 func (d *DockerCLIDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
 	output, err := utils.ExecCmd(ctx, d.dockerBinary, "stats --no-stream "+ctr.Name())
 	return output, err
 }
 
+// ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
 func (d *DockerCLIDriver) ProcNames() []string {
 	return dockerProcNames
 }
