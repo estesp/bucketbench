@@ -1,6 +1,7 @@
 package benches
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -21,18 +22,18 @@ type LimitBench struct {
 }
 
 // Init initializes the benchmark
-func (lb *LimitBench) Init(name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error {
+func (lb *LimitBench) Init(ctx context.Context, name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error {
 	return nil
 }
 
-//Validate the unit of benchmark execution
-func (lb *LimitBench) Validate() error {
+// Validate the unit of benchmark execution
+func (lb *LimitBench) Validate(ctx context.Context) error {
 	return nil
 }
 
 // Run executes the benchmark iterations against a specific engine driver type
 // for a specified number of iterations
-func (lb *LimitBench) Run(threads, iterations int, commands []string) error {
+func (lb *LimitBench) Run(ctx context.Context, threads, iterations int, commands []string) error {
 	log.Infof("Start LimitBench run: threads (%d); iterations (%d)", threads, iterations)
 	statChan := make([]chan RunStatistics, threads)
 	for i := range statChan {
@@ -42,7 +43,7 @@ func (lb *LimitBench) Run(threads, iterations int, commands []string) error {
 	start := time.Now()
 	for i := 0; i < threads; i++ {
 		lb.wg.Add(1)
-		go lb.runThread(iterations, statChan[i])
+		go lb.runThread(ctx, iterations, statChan[i])
 	}
 	lb.wg.Wait()
 	lb.elapsed = time.Since(start)
@@ -58,12 +59,11 @@ func (lb *LimitBench) Run(threads, iterations int, commands []string) error {
 	return nil
 }
 
-func (lb *LimitBench) runThread(iterations int, stats chan RunStatistics) {
+func (lb *LimitBench) runThread(ctx context.Context, iterations int, stats chan RunStatistics) {
 	for i := 0; i < iterations; i++ {
-		_, elapsed, _ := utils.ExecTimedCmd("ls", "/tmp")
-		//_, elapsed, _ := utils.ExecTimedCmd("date", "")
+		_, elapsed, _ := utils.ExecTimedCmd(ctx, "ls", "/tmp")
 		stats <- RunStatistics{
-			Durations: map[string]int{"run": elapsed},
+			Durations: map[string]time.Duration{"run": elapsed},
 		}
 	}
 	close(stats)

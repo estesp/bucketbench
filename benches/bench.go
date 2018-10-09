@@ -1,6 +1,7 @@
 package benches
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -17,8 +18,16 @@ type Type int
 // Each "step" from the benchmark is named and a map of the name
 // to a millisecond duration for that step is provided
 type RunStatistics struct {
-	Durations map[string]int
+	Durations map[string]time.Duration
 	Errors    map[string]int
+	Timestamp time.Time
+	Daemon    *ProcMetrics
+}
+
+// ProcMetrics represents stats sample from daemon
+type ProcMetrics struct {
+	Mem uint64
+	CPU float64
 }
 
 // Benchmark is the object form of a YAML-defined custom benchmark
@@ -26,7 +35,7 @@ type RunStatistics struct {
 type Benchmark struct {
 	Name     string
 	Image    string
-	Command  string //optionally override the default image CMD/ENTRYPOINT
+	Command  string // optionally override the default image CMD/ENTRYPOINT
 	RootFs   string
 	Detached bool
 	Drivers  []DriverConfig
@@ -37,9 +46,11 @@ type Benchmark struct {
 // benchmark against a specific driver type
 type DriverConfig struct {
 	Type       string
-	ClientPath string //optional path to specific client binary/socket
+	ClientPath string // optional path to specific client binary/socket
 	Threads    int
 	Iterations int
+	LogDriver  string            `yaml:"logDriver"`
+	LogOpts    map[string]string `yaml:"logOpts"`
 }
 
 // State constants
@@ -59,6 +70,8 @@ const (
 	Limit Type = iota
 	// Custom is a YAML-defined series of container actions run as a benchmark
 	Custom
+	// Benchmark daemon cpu/memory usage
+	Overhead
 )
 
 // Bench is an interface to manage benchmark execution against a specific driver
@@ -66,16 +79,16 @@ type Bench interface {
 
 	// Init initializes the benchmark (for example, verifies a daemon is running for daemon-centric
 	// engines, pre-pulls images, etc.)
-	Init(name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error
+	Init(ctx context.Context, name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error
 
-	//Validates the any condition that need to be checked before actual banchmark run.
-	//Helpful in testing operations required in benchmark for single run.
-	Validate() error
+	// Validates the any condition that need to be checked before actual banchmark run.
+	// Helpful in testing operations required in benchmark for single run.
+	Validate(ctx context.Context) error
 
 	// Run executes the specified # of iterations against a specified # of
 	// threads per benchmark against a specific engine driver type and collects
 	// the statistics of each iteration and thread
-	Run(threads, iterations int, commands []string) error
+	Run(ctx context.Context, threads, iterations int, commands []string) error
 
 	// Stats returns the statistics of the benchmark run
 	Stats() []RunStatistics
@@ -94,17 +107,24 @@ type Bench interface {
 }
 
 // New creates an instance of the selected benchmark type
-func New(btype Type) (Bench, error) {
-	switch btype {
+func New(benchType Type, logDriver string, logOpts map[string]string) (Bench, error) {
+	switch benchType {
 	case Limit:
 		return &LimitBench{
 			state: Created,
 		}, nil
 	case Custom:
 		return &CustomBench{
-			state: Created,
+			state:     Created,
+			logDriver: logDriver,
 		}, nil
+	case Overhead:
+		bench := &OverheadBench{}
+		bench.state = Created
+		bench.logDriver = logDriver
+		bench.logOpts = logOpts
+		return bench, nil
 	default:
-		return nil, fmt.Errorf("No such benchmark type: %v", btype)
+		return nil, fmt.Errorf("no such benchmark type: %v", benchType)
 	}
 }

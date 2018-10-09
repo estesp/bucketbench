@@ -15,11 +15,14 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
-
+	"math"
 	"os"
+	"os/signal"
 	"text/tabwriter"
+	"time"
 
 	"github.com/estesp/bucketbench/benches"
 	"github.com/estesp/bucketbench/driver"
@@ -32,12 +35,14 @@ import (
 const (
 	defaultLimitThreads = 10
 	defaultLimitIter    = 1000
+	limitBenchmarkName  = "Limit"
 )
 
 var (
 	yamlFile  string
 	trace     bool
 	skipLimit bool
+	overhead  bool
 )
 
 // simple structure to handle collecting output data which will be displayed
@@ -57,6 +62,20 @@ var runCmd = &cobra.Command{
 lifecycle container commands to run against which container runtimes, specifying
 iterations and number of concurrent threads. Results will be displayed afterwards.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		stopC := make(chan os.Signal, 1)
+		signal.Notify(stopC, os.Interrupt, os.Kill)
+
+		go func() {
+			select {
+			case <-stopC:
+				cancel()
+			case <-ctx.Done():
+				return
+			}
+		}()
 
 		if yamlFile == "" {
 			return fmt.Errorf("No YAML file provided with --benchmark/-b; nothing to do")
@@ -78,9 +97,9 @@ iterations and number of concurrent threads. Results will be displayed afterward
 		)
 		if !skipLimit {
 			// get thread limit stats
-			limitRates := runLimitTest()
+			limitRates := runLimitTest(ctx)
 			limitResult := benchResult{
-				name:        "Limit",
+				name:        limitBenchmarkName,
 				threads:     defaultLimitThreads,
 				iterations:  defaultLimitIter,
 				threadRates: limitRates,
@@ -90,29 +109,35 @@ iterations and number of concurrent threads. Results will be displayed afterward
 			maxThreads = 0 // no limit results in output
 		}
 
+		benchType := benches.Custom
+		if overhead {
+			benchType = benches.Overhead
+		}
+
 		for _, driverEntry := range benchmark.Drivers {
-			result, err := runBenchmark(driverEntry, benchmark)
+			result, err := runBenchmark(ctx, benchType, driverEntry, benchmark)
 			if err != nil {
 				return err
 			}
 			results = append(results, result)
 			maxThreads = intMax(maxThreads, driverEntry.Threads)
 		}
+
 		// output benchmark results
-		outputRunDetails(maxThreads, results)
+		outputRunDetails(maxThreads, results, overhead)
 
 		log.Info("Benchmark runs complete")
 		return nil
 	},
 }
 
-func runLimitTest() []float64 {
+func runLimitTest(ctx context.Context) []float64 {
 	var rates []float64
 	// get thread limit stats
 	for i := 1; i <= defaultLimitThreads; i++ {
-		limit, _ := benches.New(benches.Limit)
-		limit.Init("", driver.Null, "", "", "", trace)
-		limit.Run(i, defaultLimitIter, nil)
+		limit, _ := benches.New(benches.Limit, "", nil)
+		limit.Init(ctx, "", driver.Null, "", "", "", trace)
+		limit.Run(ctx, i, defaultLimitIter, nil)
 		duration := limit.Elapsed()
 		rate := float64(i*defaultLimitIter) / duration.Seconds()
 		rates = append(rates, rate)
@@ -121,7 +146,7 @@ func runLimitTest() []float64 {
 	return rates
 }
 
-func runBenchmark(driverConfig benches.DriverConfig, benchmark benches.Benchmark) (benchResult, error) {
+func runBenchmark(ctx context.Context, benchType benches.Type, driverConfig benches.DriverConfig, benchmark benches.Benchmark) (benchResult, error) {
 	var (
 		rates     []float64
 		stats     [][]benches.RunStatistics
@@ -131,7 +156,7 @@ func runBenchmark(driverConfig benches.DriverConfig, benchmark benches.Benchmark
 	stats = make([][]benches.RunStatistics, driverConfig.Threads)
 
 	for i := 1; i <= driverConfig.Threads; i++ {
-		bench, _ := benches.New(benches.Custom)
+		bench, _ := benches.New(benchType, driverConfig.LogDriver, driverConfig.LogOpts)
 		imageInfo := benchmark.Image
 		if driverType == driver.Runc || driverType == driver.Ctr {
 			// legacy ctr mode and runc drivers need an exploded rootfs
@@ -141,15 +166,15 @@ func runBenchmark(driverConfig benches.DriverConfig, benchmark benches.Benchmark
 			}
 			imageInfo = benchmark.RootFs
 		}
-		err := bench.Init(benchmark.Name, driverType, driverConfig.ClientPath, imageInfo, benchmark.Command, trace)
+		err := bench.Init(ctx, benchmark.Name, driverType, driverConfig.ClientPath, imageInfo, benchmark.Command, trace)
 		if err != nil {
 			return benchResult{}, err
 		}
 		benchInfo = bench.Info()
-		if err = bench.Validate(); err != nil {
+		if err = bench.Validate(ctx); err != nil {
 			return benchResult{}, fmt.Errorf("Error during bench validate: %v", err)
 		}
-		err = bench.Run(i, driverConfig.Iterations, benchmark.Commands)
+		err = bench.Run(ctx, i, driverConfig.Iterations, benchmark.Commands)
 		if err != nil {
 			return benchResult{}, fmt.Errorf("Error during bench run: %v", err)
 		}
@@ -169,7 +194,18 @@ func runBenchmark(driverConfig benches.DriverConfig, benchmark benches.Benchmark
 	return result, nil
 }
 
-func outputRunDetails(maxThreads int, results []benchResult) {
+func getDelta(before, after float64) float64 {
+	switch {
+	case before != 0:
+		return after / before
+	case after == 0:
+		return 1
+	default:
+		return math.Inf(1)
+	}
+}
+
+func outputRunDetails(maxThreads int, results []benchResult, overhead bool) {
 	w := tabwriter.NewWriter(os.Stdout, 10, 4, 2, ' ', tabwriter.AlignRight)
 
 	fmt.Printf("\nSUMMARY TIMINGS/THREAD RATES\n\n")
@@ -193,7 +229,7 @@ func outputRunDetails(maxThreads int, results []benchResult) {
 	fmt.Printf("DETAILED COMMAND TIMINGS/STATISTICS\n")
 	// output per-command timings across the runs as well
 	for _, result := range results {
-		if result.name == "Limit" {
+		if result.name == limitBenchmarkName {
 			// the limit "benchmark" has no detailed statistics
 			continue
 		}
@@ -211,7 +247,127 @@ func outputRunDetails(maxThreads int, results []benchResult) {
 		}
 		fmt.Println("")
 	}
+
 	w.Flush()
+
+	if overhead {
+		fmt.Fprintf(w, "\n")
+		fmt.Fprintf(w, "OVERHEAD\n\n")
+
+		fmt.Fprintf(w, "Bench / driver / threads\tMin\tMax\tAvg\tMin\tMax\tAvg\tMem %%\tCPU x\t\n")
+
+		var overheadResults []benchResult
+		for _, res := range results {
+			if res.name == limitBenchmarkName {
+				continue
+			}
+			overheadResults = append(overheadResults, res)
+		}
+
+		if len(overheadResults) == 0 {
+			fmt.Fprint(w, "No data")
+			return
+		}
+
+		// Preprocess statistics before output
+		metrics := make([][]metricsResults, len(overheadResults))
+		for i, res := range overheadResults {
+			metrics[i] = make([]metricsResults, res.threads)
+			for j := 0; j < len(res.statistics); j++ {
+				metrics[i][j] = parseMetrics(res.statistics[j])
+			}
+		}
+
+		for i, res := range overheadResults {
+			for j := 0; j < res.threads; j++ {
+				m := metrics[i][j]
+
+				fmt.Fprintf(w,
+					"%s:%d\t%d MB\t%d MB\t%d MB\t%.2f %%\t%.2f %%\t%.2f %%\t",
+					res.name, j+1,
+					m.minMem, m.maxMem, m.avgMem,
+					m.minCPU, m.maxCPU, m.avgCPU)
+
+				if i > 0 {
+					// Output overhead comparing to first result
+
+					if j < overheadResults[0].threads {
+						// Mem percent change, ranging from -100% up.
+						mem := 100*getDelta(float64(metrics[0][j].avgMem), float64(m.avgMem)) - 100
+						cpu := getDelta(metrics[0][j].avgCPU, m.avgCPU)
+
+						fmt.Fprintf(w, "%+.2f%%\t%+.2fx\t", mem, cpu)
+					}
+				}
+
+				fmt.Fprint(w, "\n")
+			}
+		}
+
+		w.Flush()
+	}
+}
+
+type metricsResults struct {
+	minMem uint64
+	maxMem uint64
+	avgMem uint64
+	minCPU float64
+	maxCPU float64
+	avgCPU float64
+}
+
+func parseMetrics(metrics []benches.RunStatistics) metricsResults {
+	var mems []float64
+	var cpus []float64
+
+	metrics = filterStats(metrics, func(stat benches.RunStatistics) bool {
+		return stat.Daemon != nil
+	})
+
+	for _, m := range metrics {
+		mems = append(mems, float64(m.Daemon.Mem))
+		cpus = append(cpus, m.Daemon.CPU)
+	}
+
+	minMem, err := stats.Min(mems)
+	if err != nil {
+		log.Errorf("error finding min mem: %v", err)
+	}
+
+	maxMem, err := stats.Max(mems)
+	if err != nil {
+		log.Errorf("error finding max mem: %v", err)
+	}
+
+	avgMem, err := stats.Mean(mems)
+	if err != nil {
+		log.Errorf("error finding avg mem: %v", err)
+	}
+
+	minCPU, err := stats.Min(cpus)
+	if err != nil {
+		log.Errorf("error finding min cpu: %v", err)
+	}
+
+	maxCPU, err := stats.Max(cpus)
+	if err != nil {
+		log.Errorf("error finding max cpu: %v", err)
+	}
+
+	avgCPU, err := stats.Mean(cpus)
+	if err != nil {
+		log.Errorf("error finding avg cpu: %v", err)
+	}
+
+	return metricsResults{
+		minMem: uint64(minMem),
+		maxMem: uint64(maxMem),
+		avgMem: uint64(avgMem),
+		minCPU: minCPU,
+		maxCPU: maxCPU,
+		avgCPU: avgCPU,
+	}
 }
 
 type statResults struct {
@@ -223,10 +379,25 @@ type statResults struct {
 	errors int
 }
 
+func filterStats(stats []benches.RunStatistics, check func(benches.RunStatistics) bool) (ret []benches.RunStatistics) {
+	for _, stat := range stats {
+		if check(stat) {
+			ret = append(ret, stat)
+		}
+	}
+
+	return
+}
+
 func parseStats(statistics []benches.RunStatistics) map[string]statResults {
 	result := make(map[string]statResults)
 	durationSeq := make(map[string][]float64)
 	errorSeq := make(map[string][]int)
+
+	statistics = filterStats(statistics, func(stat benches.RunStatistics) bool {
+		return stat.Daemon == nil
+	})
+
 	iterations := len(statistics)
 
 	durationKeys := make([]string, len(statistics[0].Durations))
@@ -237,7 +408,7 @@ func parseStats(statistics []benches.RunStatistics) map[string]statResults {
 	}
 	for i := 0; i < iterations; i++ {
 		for key, duration := range statistics[i].Durations {
-			durationSeq[key] = append(durationSeq[key], float64(duration))
+			durationSeq[key] = append(durationSeq[key], float64(duration.Nanoseconds()/int64(time.Millisecond)))
 		}
 		for key, errors := range statistics[i].Errors {
 			errorSeq[key] = append(errorSeq[key], errors)
@@ -314,4 +485,5 @@ func init() {
 	runCmd.PersistentFlags().StringVarP(&yamlFile, "benchmark", "b", "", "YAML file with benchmark definition")
 	runCmd.PersistentFlags().BoolVarP(&trace, "trace", "t", false, "Enable per-container tracing during benchmark runs")
 	runCmd.PersistentFlags().BoolVarP(&skipLimit, "skip-limit", "s", false, "Skip 'limit' benchmark run")
+	runCmd.PersistentFlags().BoolVarP(&overhead, "overhead", "o", false, "Output daemon overhead")
 }

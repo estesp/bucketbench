@@ -1,6 +1,7 @@
 package benches
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -17,6 +18,8 @@ type CustomBench struct {
 	driver      driver.Driver
 	imageInfo   string
 	cmdOverride string
+	logDriver   string
+	logOpts     map[string]string
 	trace       bool
 	stats       []RunStatistics
 	elapsed     time.Duration
@@ -25,22 +28,22 @@ type CustomBench struct {
 }
 
 // Init initializes the benchmark
-func (cb *CustomBench) Init(name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error {
-	driver, err := driver.New(driverType, binaryPath)
+func (cb *CustomBench) Init(ctx context.Context, name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error {
+	driver, err := driver.New(ctx, driverType, binaryPath, cb.logDriver, cb.logOpts)
 	if err != nil {
-		return fmt.Errorf("Error during driver initialization for CustomBench: %v", err)
+		return fmt.Errorf("error during driver initialization for CustomBench: %v", err)
 	}
 	// get driver info; will also validate for daemon-based variants whether system is ready/up
 	// and running for benchmarking
-	info, err := driver.Info()
+	info, err := driver.Info(ctx)
 	if err != nil {
-		return fmt.Errorf("Error during driver info query: %v", err)
+		return fmt.Errorf("error during driver info query: %v", err)
 	}
-	log.Infof("Driver initialized: %s", info)
+	log.Infof("driver initialized: %s", info)
 	// prepare environment
-	err = driver.Clean()
+	err = driver.Clean(ctx)
 	if err != nil {
-		return fmt.Errorf("Error during driver init cleanup: %v", err)
+		return fmt.Errorf("error during driver init cleanup: %v", err)
 	}
 	cb.benchName = name
 	cb.imageInfo = imageInfo
@@ -52,25 +55,25 @@ func (cb *CustomBench) Init(name string, driverType driver.Type, binaryPath, ima
 
 // Validate the unit of benchmark execution (create-run-stop-remove) against
 // the initialized driver.
-func (cb *CustomBench) Validate() error {
-	ctr, err := cb.driver.Create("bb-test", cb.imageInfo, cb.cmdOverride, true, cb.trace)
+func (cb *CustomBench) Validate(ctx context.Context) error {
+	ctr, err := cb.driver.Create(ctx, "bb-test", cb.imageInfo, cb.cmdOverride, true, cb.trace)
 	if err != nil {
 		return fmt.Errorf("Driver validation: error creating test container: %v", err)
 	}
 
-	_, _, err = cb.driver.Run(ctr)
+	_, _, err = cb.driver.Run(ctx, ctr)
 	if err != nil {
 		return fmt.Errorf("Driver validation: error running test container: %v", err)
 	}
 
-	_, _, err = cb.driver.Stop(ctr)
+	_, _, err = cb.driver.Stop(ctx, ctr)
 	if err != nil {
 		return fmt.Errorf("Driver validation: error stopping test container: %v", err)
 	}
 	// allow time for quiesce of stopped state in process and container executor metadata
 	time.Sleep(50 * time.Millisecond)
 
-	_, _, err = cb.driver.Remove(ctr)
+	_, _, err = cb.driver.Remove(ctx, ctr)
 	if err != nil {
 		return fmt.Errorf("Driver validation: error deleting test container: %v", err)
 	}
@@ -79,7 +82,7 @@ func (cb *CustomBench) Validate() error {
 
 // Run executes the benchmark iterations against a specific engine driver type
 // for a specified number of iterations
-func (cb *CustomBench) Run(threads, iterations int, commands []string) error {
+func (cb *CustomBench) Run(ctx context.Context, threads, iterations int, commands []string) error {
 	log.Infof("Start CustomBench run: threads (%d); iterations (%d)", threads, iterations)
 	statChan := make([]chan RunStatistics, threads)
 	for i := range statChan {
@@ -90,12 +93,12 @@ func (cb *CustomBench) Run(threads, iterations int, commands []string) error {
 	for i := 0; i < threads; i++ {
 		// create a driver instance for each thread to protect from drivers
 		// which may not be threadsafe (e.g. gRPC client connection in containerd?)
-		drv, err := driver.New(cb.driver.Type(), cb.driver.Path())
+		drv, err := driver.New(ctx, cb.driver.Type(), cb.driver.Path(), cb.logDriver, cb.logOpts)
 		if err != nil {
 			return fmt.Errorf("error creating new driver for thread %d: %v", i, err)
 		}
 		cb.wg.Add(1)
-		go cb.runThread(drv, i, iterations, commands, statChan[i])
+		go cb.runThread(ctx, drv, i, iterations, commands, statChan[i])
 	}
 	cb.wg.Wait()
 	cb.elapsed = time.Since(start)
@@ -109,61 +112,82 @@ func (cb *CustomBench) Run(threads, iterations int, commands []string) error {
 	}
 	cb.state = Completed
 	// final environment cleanup
-	if err := cb.driver.Clean(); err != nil {
+	if err := cb.driver.Clean(ctx); err != nil {
 		return fmt.Errorf("Error during driver final cleanup: %v", err)
 	}
 	return nil
 }
 
-func (cb *CustomBench) runThread(driver driver.Driver, threadNum, iterations int, commands []string, stats chan RunStatistics) {
+func (cb *CustomBench) runThread(ctx context.Context, runner driver.Driver, threadNum, iterations int, commands []string, stats chan RunStatistics) {
 	for i := 0; i < iterations; i++ {
 		errors := make(map[string]int)
-		durations := make(map[string]int)
+		durations := make(map[string]time.Duration)
 		// commands are specified in the passed in array; we will need
 		// a container for each set of commands:
-		name := fmt.Sprintf("bb-ctr-%d-%d", threadNum, i)
-		ctr, err := driver.Create(name, cb.imageInfo, cb.cmdOverride, true, cb.trace)
+		name := fmt.Sprintf("%s-%d-%d", driver.ContainerNamePrefix, threadNum, i)
+		ctr, err := runner.Create(ctx, name, cb.imageInfo, cb.cmdOverride, true, cb.trace)
 		if err != nil {
 			log.Errorf("Error on creating container %q from image %q: %v", name, cb.imageInfo, err)
 		}
 
 		for _, cmd := range commands {
+			log.Debugf("running command: %s", cmd)
 			switch strings.ToLower(cmd) {
 			case "run", "start":
-				out, runElapsed, err := driver.Run(ctr)
+				out, runElapsed, err := runner.Run(ctx, ctr)
 				if err != nil {
 					errors["run"]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations["run"] = runElapsed
+				log.Debug(out)
 			case "stop", "kill":
-				out, stopElapsed, err := driver.Stop(ctr)
+				out, stopElapsed, err := runner.Stop(ctx, ctr)
 				if err != nil {
 					errors["stop"]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations["stop"] = stopElapsed
+				log.Debug(out)
 			case "remove", "erase", "delete":
-				out, rmElapsed, err := driver.Remove(ctr)
+				out, rmElapsed, err := runner.Remove(ctx, ctr)
 				if err != nil {
 					errors["delete"]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations["delete"] = rmElapsed
+				log.Debug(out)
 			case "pause":
-				out, pauseElapsed, err := driver.Pause(ctr)
+				out, pauseElapsed, err := runner.Pause(ctx, ctr)
 				if err != nil {
 					errors["pause"]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations["pause"] = pauseElapsed
+				log.Debug(out)
 			case "unpause", "resume":
-				out, unpauseElapsed, err := driver.Unpause(ctr)
+				out, unpauseElapsed, err := runner.Unpause(ctx, ctr)
 				if err != nil {
 					errors["resume"]++
 					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
 				}
 				durations["resume"] = unpauseElapsed
+				log.Debug(out)
+			case "wait":
+				out, waitElapsed, err := runner.Wait(ctx, ctr)
+				if err != nil {
+					errors["wait"]++
+					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
+				}
+				durations["wait"] = waitElapsed
+				log.Debug(out)
+			case "metrics", "stats":
+				out, err := runner.Metrics(ctx, ctr)
+				if err != nil {
+					errors["metrics"]++
+					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
+				}
+				log.Debug(out)
 			default:
 				log.Errorf("Command %q unrecognized from YAML commands list; skipping", cmd)
 			}
@@ -171,9 +195,10 @@ func (cb *CustomBench) runThread(driver driver.Driver, threadNum, iterations int
 		stats <- RunStatistics{
 			Durations: durations,
 			Errors:    errors,
+			Timestamp: time.Now().UTC(),
 		}
 	}
-	if err := driver.Close(); err != nil {
+	if err := runner.Close(); err != nil {
 		log.Errorf("error on closing driver: %v", err)
 	}
 	close(stats)

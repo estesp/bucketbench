@@ -1,13 +1,22 @@
 package driver
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+	"time"
+)
 
 // Type represents the know implementations of the driver interface
 type Type int
 
+// ContainerNamePrefix represents containers name prefix
+const ContainerNamePrefix = "bb-ctr"
+
 const (
-	// Docker represents the Docker driver implementation
-	Docker Type = iota
+	// DockerCLI represents the Docker CLI driver implementation
+	DockerCLI Type = iota
+	// Docker represents the Docker API driver implementation
+	Docker
 	// Runc represents the runc-based driver implementation
 	Runc
 	// Containerd represents the containerd-based driver implementation
@@ -16,7 +25,7 @@ const (
 	// Ctr represents the containerd legacy driver using the `ctr`
 	// binary to drive containerd operations
 	Ctr
-	//CRI driver represents k8s Container Runtime Interface
+	// CRI driver represents k8s Container Runtime Interface
 	CRI
 	// Null driver represents an empty driver for use by benchmarks that
 	// require no driver
@@ -56,45 +65,59 @@ type Driver interface {
 	Type() Type
 
 	// Info returns a string with information about the container engine/runtime details
-	Info() (string, error)
+	Info(ctx context.Context) (string, error)
 
 	// Path returns the binary (or socket) path related to the runtime in use
 	Path() string
 
 	// Create will create a container instance matching the specific needs
 	// of a driver
-	Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error)
+	Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error)
 
 	// Clean will clean the operating environment of a specific driver
-	Clean() error
+	Clean(ctx context.Context) error
 
 	// Run will execute a container using the driver
-	Run(ctr Container) (string, int, error)
+	Run(ctx context.Context, ctr Container) (string, time.Duration, error)
 
 	// Stop will stop/kill a container
-	Stop(ctr Container) (string, int, error)
+	Stop(ctx context.Context, ctr Container) (string, time.Duration, error)
 
 	// Remove will remove a container
-	Remove(ctr Container) (string, int, error)
+	Remove(ctx context.Context, ctr Container) (string, time.Duration, error)
 
 	// Pause will pause a container
-	Pause(ctr Container) (string, int, error)
+	Pause(ctx context.Context, ctr Container) (string, time.Duration, error)
 
 	// Unpause will unpause/resume a container
-	Unpause(ctr Container) (string, int, error)
+	Unpause(ctx context.Context, ctr Container) (string, time.Duration, error)
+
+	// Wait blocks thread until container stop
+	Wait(ctx context.Context, ctr Container) (string, time.Duration, error)
 
 	// Close allows the driver to free any resources/close any
 	// connections
 	Close() error
+
+	// PID returns daemon process id
+	PID() (int, error)
+
+	// ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
+	ProcNames() []string
+
+	// Metrics returns stats data from daemon for container
+	Metrics(ctx context.Context, ctr Container) (interface{}, error)
 }
 
 // New creates a driver instance of a specific type
-func New(dtype Type, path string) (Driver, error) {
-	switch dtype {
+func New(ctx context.Context, driverType Type, path string, logDriver string, logOpts map[string]string) (Driver, error) {
+	switch driverType {
 	case Runc:
 		return NewRuncDriver(path)
+	case DockerCLI:
+		return NewDockerCLIDriver(ctx, path, logDriver, logOpts)
 	case Docker:
-		return NewDockerDriver(path)
+		return NewDockerDriver(ctx, logDriver, logOpts)
 	case Containerd:
 		return NewContainerdDriver(path)
 	case Ctr:
@@ -104,7 +127,7 @@ func New(dtype Type, path string) (Driver, error) {
 	case Null:
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("No such driver type: %v", dtype)
+		return nil, fmt.Errorf("no such driver type: %v", driverType)
 	}
 }
 
@@ -112,6 +135,8 @@ func New(dtype Type, path string) (Driver, error) {
 func TypeToString(dtype Type) string {
 	var driverType string
 	switch dtype {
+	case DockerCLI:
+		driverType = "DockerCLI"
 	case Docker:
 		driverType = "Docker"
 	case Containerd:
@@ -132,6 +157,8 @@ func TypeToString(dtype Type) string {
 func StringToType(dtype string) Type {
 	var driverType Type
 	switch dtype {
+	case "DockerCLI":
+		driverType = DockerCLI
 	case "Docker":
 		driverType = Docker
 	case "Containerd":

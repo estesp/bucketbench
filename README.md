@@ -39,6 +39,7 @@ Usage:
 Flags:
   -b, --benchmark string   YAML file with benchmark definition
   -h, --help               help for run
+  -o, --overhead           Output daemon overhead
   -s, --skip-limit         Skip 'limit' benchmark run
   -t, --trace              Enable per-container tracing during benchmark runs
 
@@ -95,6 +96,8 @@ Each driver has the following settings:
  - **clientpath**: *[Optional]* Path to the binary for client executable based drivers. In the case of containerd 1.0 and the CRI driver, this will be the unique UNIX socket path of the gRPC server. For client binary-based drivers, the driver will default to the standard binary name found in the current `$PATH`
  - **threads**: Integer number of concurrent threads to run. The `bucketbench` method is to execute 1..n runs, where `n` is the number of threads and each run adds another concurrent thread. **Run 1** only has one thread and **Run N** will have `n` concurrent threads.
  - **iterations**: Number of containers to create in each thread and execute the listed commands against.
+ - **logDriver**: `Docker` and `DockerCLI` support log driver configuration to measure overhead between different implementations. Allowed values can be found [here](https://docs.docker.com/config/containers/logging/configure/#supported-logging-drivers).
+ - **logOpts**: logger driver configuration, only used with `logDriver` option. See `overhead-logdriver.yaml` for examples.
 
 #### Command List
 
@@ -106,6 +109,8 @@ The following commands are accepted as input:
  - **unpause**: (aliases: **resume**) resume a paused container
  - **stop**: (aliases: **kill**) stop/kill the running container processes
  - **remove**: (aliases: **erase**,**delete**) remove/delete a container instance
+ - **metrics**: (aliases: **stats**) query container daemon metrics
+ - **wait**: wait for container stop
 
 Note that `bucketbench` is not handling any formal state validation on the list
 of commands. It is currently up to the user to provide a valid/sane ordered
@@ -121,6 +126,22 @@ of the thread counts:
 Limit            1000    1171.24  1957.17  2101.13  2067.83  1827.92  1637.32  1257.57  1582.36  1306.08  1699.56
 Basic:Docker       15       1.40     2.21     2.81
 Basic:Runc         50       8.38    15.85    23.00
+```
+
+If you add `overhead` flag, `bucketbench` will measure container daemon cpu
+and memory consumption. The output will look like:
+
+```
+    Bench / driver / threads       Min       Max       Avg       Min       Max       Avg     Mem %     CPU x
+  OverheadBench:Containerd:1     40 MB     42 MB     41 MB    0.00 %    6.00 %    0.32 %
+  OverheadBench:Containerd:2     44 MB     46 MB     44 MB    0.00 %   10.00 %    0.57 %
+  OverheadBench:Containerd:3     46 MB     46 MB     46 MB    0.00 %   14.00 %    0.73 %
+  OverheadBench:Containerd:4     46 MB     47 MB     46 MB    0.00 %   20.00 %    0.94 %
+
+      OverheadBench:Docker:1     64 MB     66 MB     64 MB    0.00 %   10.00 %    0.58 %   +56.10%    +1.84x
+      OverheadBench:Docker:2     69 MB     73 MB     70 MB    0.00 %   20.00 %    1.29 %   +59.09%    +2.26x
+      OverheadBench:Docker:3     73 MB     73 MB     73 MB    0.00 %   32.00 %    1.97 %   +58.70%    +2.70x
+      OverheadBench:Docker:4     73 MB     73 MB     73 MB    0.00 %   27.99 %    2.67 %   +58.70%    +2.85x
 ```
 
 More detailed information is collected during the runs and a future PR to
@@ -151,6 +172,15 @@ with Go 1.9.x and 1.10. A simple `Makefile` is available to simplify building
 bucketbench as a dynamic or static binary. `make binary` will build the
 `bucketbench` binary and `make install` will place it in your `$PATH`. You
 should also be able to simply `go install github.com/estesp/bucketbench`.
+
+## Caveats and limitations
+
+- Overhead benchmark implementation only covers `Docker` and `Containerd`
+- The benchmark uses process name matching to find relevant processes; you must 
+keep the expected process names (`dockerd`, `docker-containerd`, and `docker-containerd-shim`
+for Docker and `containerd` and `containerd-shim` for containerd) and not run 
+additional processes with the same names.
+
 
 ## TODOs
 

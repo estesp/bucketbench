@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -31,7 +32,6 @@ type CRIDriver struct {
 	criSocketAddress string
 	runtimeClient    *pb.RuntimeServiceClient
 	imageClient      *pb.ImageServiceClient
-	context          context.Context
 	pconfig          pb.PodSandboxConfig
 	cconfig          pb.ContainerConfig
 }
@@ -75,7 +75,6 @@ func NewCRIDriver(path string) (Driver, error) {
 		criSocketAddress: path,
 		runtimeClient:    &runtimeClient,
 		imageClient:      &imageClient,
-		context:          context.Background(),
 		cconfig:          cconfig,
 		pconfig:          pconfig,
 	}
@@ -133,8 +132,8 @@ func (c *CRIDriver) Type() Type {
 }
 
 // Info returns a string with information about the container engine/runtime details
-func (c *CRIDriver) Info() (string, error) {
-	version, err := (*c.runtimeClient).Version(c.context, &pb.VersionRequest{})
+func (c *CRIDriver) Info(ctx context.Context) (string, error) {
+	version, err := (*c.runtimeClient).Version(ctx, &pb.VersionRequest{})
 	if err != nil {
 		return "", err
 	}
@@ -151,15 +150,15 @@ func (c *CRIDriver) Path() string {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (c *CRIDriver) Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
-	if status, err := (*c.imageClient).ImageStatus(c.context, &pb.ImageStatusRequest{Image: &pb.ImageSpec{Image: image}}); err != nil || status.Image == nil {
-		if _, err := (*c.imageClient).PullImage(c.context, &pb.PullImageRequest{Image: &pb.ImageSpec{Image: image}}); err != nil {
+func (c *CRIDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+	if status, err := (*c.imageClient).ImageStatus(ctx, &pb.ImageStatusRequest{Image: &pb.ImageSpec{Image: image}}); err != nil || status.Image == nil {
+		if _, err := (*c.imageClient).PullImage(ctx, &pb.PullImageRequest{Image: &pb.ImageSpec{Image: image}}); err != nil {
 			return nil, err
 		}
 	}
 
-	if status, err := (*c.imageClient).ImageStatus(c.context, &pb.ImageStatusRequest{Image: &pb.ImageSpec{Image: defaultPodImage}}); err != nil || status.Image == nil {
-		if _, err := (*c.imageClient).PullImage(c.context, &pb.PullImageRequest{Image: &pb.ImageSpec{Image: defaultPodImage}}); err != nil {
+	if status, err := (*c.imageClient).ImageStatus(ctx, &pb.ImageStatusRequest{Image: &pb.ImageSpec{Image: defaultPodImage}}); err != nil || status.Image == nil {
+		if _, err := (*c.imageClient).PullImage(ctx, &pb.PullImageRequest{Image: &pb.ImageSpec{Image: defaultPodImage}}); err != nil {
 			return nil, err
 		}
 	}
@@ -167,7 +166,7 @@ func (c *CRIDriver) Create(name, image, cmdOverride string, detached bool, trace
 	pconfig := pconfigGlobal
 	pconfig.Metadata.Name = defaultPodNamePrefix + name
 
-	podInfo, err := (*c.runtimeClient).RunPodSandbox(c.context, &pb.RunPodSandboxRequest{Config: &pconfig})
+	podInfo, err := (*c.runtimeClient).RunPodSandbox(ctx, &pb.RunPodSandboxRequest{Config: &pconfig})
 	if err != nil {
 		return nil, err
 	}
@@ -184,24 +183,24 @@ func (c *CRIDriver) Create(name, image, cmdOverride string, detached bool, trace
 }
 
 // Clean will clean the operating environment of a specific driver
-func (c CRIDriver) Clean() error {
+func (c CRIDriver) Clean(ctx context.Context) error {
 
-	resp, err := (*c.runtimeClient).ListContainers(c.context, &pb.ListContainersRequest{Filter: &pb.ContainerFilter{}})
+	resp, err := (*c.runtimeClient).ListContainers(ctx, &pb.ListContainersRequest{Filter: &pb.ContainerFilter{}})
 	if err != nil {
 		return err
 	}
 	containers := resp.GetContainers()
 	for _, ctr := range containers {
 		podID := ctr.GetPodSandboxId()
-		_, err := (*c.runtimeClient).StopContainer(c.context, &pb.StopContainerRequest{ContainerId: ctr.GetId(), Timeout: 0})
+		_, err := (*c.runtimeClient).StopContainer(ctx, &pb.StopContainerRequest{ContainerId: ctr.GetId(), Timeout: 0})
 		if err != nil {
 			log.Errorf("Error stopping container: %v", err)
 		}
-		_, err = (*c.runtimeClient).RemoveContainer(c.context, &pb.RemoveContainerRequest{ContainerId: ctr.GetId()})
+		_, err = (*c.runtimeClient).RemoveContainer(ctx, &pb.RemoveContainerRequest{ContainerId: ctr.GetId()})
 		if err != nil {
 			log.Errorf("Error deleting container %v", err)
 		}
-		_, err = (*c.runtimeClient).RemovePodSandbox(c.context, &pb.RemovePodSandboxRequest{PodSandboxId: podID})
+		_, err = (*c.runtimeClient).RemovePodSandbox(ctx, &pb.RemovePodSandboxRequest{PodSandboxId: podID})
 		if err != nil {
 			log.Errorf("Error deleting pod %s, %v", podID, err)
 		}
@@ -211,27 +210,25 @@ func (c CRIDriver) Clean() error {
 }
 
 // Run will execute a container using the driver
-func (c *CRIDriver) Run(ctr Container) (string, int, error) {
+func (c *CRIDriver) Run(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
 	cconfig := cconfigGlobal
 	pconfig := pconfigGlobal
 	cconfig.Metadata.Name = ctr.Name()
 	pconfig.Metadata.Name = defaultPodNamePrefix + cconfig.Metadata.Name
 
-	_, err := (*c.runtimeClient).CreateContainer(c.context, &pb.CreateContainerRequest{PodSandboxId: ctr.GetPodID(), Config: &cconfig, SandboxConfig: &pconfig})
+	_, err := (*c.runtimeClient).CreateContainer(ctx, &pb.CreateContainerRequest{PodSandboxId: ctr.GetPodID(), Config: &cconfig, SandboxConfig: &pconfig})
 	if err != nil {
 		return "", 0, err
 	}
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-
-	return "", msElapsed, nil
+	return "", elapsed, nil
 }
 
 // Stop will stop/kill a container
-func (c *CRIDriver) Stop(ctr Container) (string, int, error) {
+func (c *CRIDriver) Stop(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	start := time.Now()
-	resp, err := (*c.runtimeClient).ListContainers(c.context, &pb.ListContainersRequest{Filter: &pb.ContainerFilter{PodSandboxId: ctr.GetPodID()}})
+	resp, err := (*c.runtimeClient).ListContainers(ctx, &pb.ListContainersRequest{Filter: &pb.ContainerFilter{PodSandboxId: ctr.GetPodID()}})
 	if err != nil {
 		return "", 0, nil
 	}
@@ -239,28 +236,26 @@ func (c *CRIDriver) Stop(ctr Container) (string, int, error) {
 	containers := resp.GetContainers()
 	for _, ctr := range containers {
 		podID := ctr.GetPodSandboxId()
-		_, err := (*c.runtimeClient).StopContainer(c.context, &pb.StopContainerRequest{ContainerId: ctr.GetId(), Timeout: 0})
+		_, err := (*c.runtimeClient).StopContainer(ctx, &pb.StopContainerRequest{ContainerId: ctr.GetId(), Timeout: 0})
 		if err != nil {
 			log.Errorf("Error Stoping container %v", err)
 			return "", 0, nil
 		}
-		_, err = (*c.runtimeClient).StopPodSandbox(c.context, &pb.StopPodSandboxRequest{PodSandboxId: podID})
+		_, err = (*c.runtimeClient).StopPodSandbox(ctx, &pb.StopPodSandboxRequest{PodSandboxId: podID})
 		if err != nil {
 			log.Errorf("Error Stoping pod %v", err)
 			return "", 0, nil
 		}
 	}
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-
-	return "", msElapsed, nil
+	return "", elapsed, nil
 }
 
 // Remove will remove a container
-func (c *CRIDriver) Remove(ctr Container) (string, int, error) {
+func (c *CRIDriver) Remove(ctx context.Context, ctr Container) (string, time.Duration, error) {
 
 	start := time.Now()
-	resp, err := (*c.runtimeClient).ListContainers(c.context, &pb.ListContainersRequest{Filter: &pb.ContainerFilter{PodSandboxId: ctr.GetPodID()}})
+	resp, err := (*c.runtimeClient).ListContainers(ctx, &pb.ListContainersRequest{Filter: &pb.ContainerFilter{PodSandboxId: ctr.GetPodID()}})
 	if err != nil {
 		return "", 0, nil
 	}
@@ -268,32 +263,30 @@ func (c *CRIDriver) Remove(ctr Container) (string, int, error) {
 	containers := resp.GetContainers()
 	for _, ctr := range containers {
 		podID := ctr.GetPodSandboxId()
-		_, err = (*c.runtimeClient).RemoveContainer(c.context, &pb.RemoveContainerRequest{ContainerId: ctr.GetId()})
+		_, err = (*c.runtimeClient).RemoveContainer(ctx, &pb.RemoveContainerRequest{ContainerId: ctr.GetId()})
 		if err != nil {
 			log.Errorf("Error deleting container %v", err)
 			return "", 0, nil
 		}
-		_, err = (*c.runtimeClient).RemovePodSandbox(c.context, &pb.RemovePodSandboxRequest{PodSandboxId: podID})
+		_, err = (*c.runtimeClient).RemovePodSandbox(ctx, &pb.RemovePodSandboxRequest{PodSandboxId: podID})
 		if err != nil {
 			log.Errorf("Error deleting pod %v", err)
 			return "", 0, nil
 		}
 	}
 	elapsed := time.Since(start)
-	msElapsed := int(elapsed.Nanoseconds() / 1000000)
-
-	return "", msElapsed, nil
+	return "", elapsed, nil
 }
 
 // Pause will pause a container
 // not supported in CRI API
-func (c *CRIDriver) Pause(ctr Container) (string, int, error) {
+func (c *CRIDriver) Pause(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	return "", 0, nil
 }
 
 // Unpause will unpause/resume a container
 // not supported in CRI API
-func (c *CRIDriver) Unpause(ctr Container) (string, int, error) {
+func (c *CRIDriver) Unpause(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	return "", 0, nil
 }
 
@@ -301,6 +294,26 @@ func (c *CRIDriver) Unpause(ctr Container) (string, int, error) {
 // connections
 func (c *CRIDriver) Close() error {
 	return nil
+}
+
+// PID returns daemon process id
+func (c *CRIDriver) PID() (int, error) {
+	return 0, errors.New("not implemented")
+}
+
+// Wait blocks thread until container stop
+func (c *CRIDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return "", 0, errors.New("not implemented")
+}
+
+// Metrics returns stats data from daemon for container
+func (c *CRIDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
+	return nil, errors.New("not implemented")
+}
+
+// ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
+func (c *CRIDriver) ProcNames() []string {
+	return []string{}
 }
 
 func openFile(path string) (*os.File, error) {

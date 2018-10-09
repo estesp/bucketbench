@@ -2,8 +2,11 @@ package driver
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/estesp/bucketbench/utils"
 	log "github.com/sirupsen/logrus"
@@ -112,14 +115,34 @@ func (r *CtrDriver) Close() error {
 	return nil
 }
 
+// PID returns containerd process id
+func (r *CtrDriver) PID() (int, error) {
+	return 0, errors.New("not implemented")
+}
+
+// Wait blocks thread until container stop
+func (r *CtrDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return "", 0, errors.New("not implemented")
+}
+
+// Metrics returns stats data from daemon for container
+func (r *CtrDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
+	return nil, errors.New("not implemented")
+}
+
+// ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
+func (r *CtrDriver) ProcNames() []string {
+	return containerdProcNames
+}
+
 // Info returns
-func (r *CtrDriver) Info() (string, error) {
+func (r *CtrDriver) Info(ctx context.Context) (string, error) {
 	info := "containerd legacy driver (ctr client binary: " + r.ctrBinary + ")"
-	clientVersionInfo, err := utils.ExecCmd(r.ctrBinary, "--v")
+	clientVersionInfo, err := utils.ExecCmd(ctx, r.ctrBinary, "--v")
 	if err != nil {
 		return "", fmt.Errorf("Error trying to retrieve containerd client version info: %v", err)
 	}
-	daemonVersionInfo, err := utils.ExecCmd(r.ctrBinary, "version")
+	daemonVersionInfo, err := utils.ExecCmd(ctx, r.ctrBinary, "version")
 	if err != nil {
 		return "", fmt.Errorf("Error trying to retrieve containerd daemon version info: %v", err)
 	}
@@ -130,14 +153,14 @@ func (r *CtrDriver) Info() (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (r *CtrDriver) Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+func (r *CtrDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
 	return newCtrContainer(name, image, trace), nil
 }
 
 // Clean will clean the environment; removing any remaining containers in the runc metadata
-func (r *CtrDriver) Clean() error {
+func (r *CtrDriver) Clean(ctx context.Context) error {
 	var tries int
-	out, err := utils.ExecCmd(r.ctrBinary, "containers")
+	out, err := utils.ExecCmd(ctx, r.ctrBinary, "containers")
 	if err != nil {
 		return fmt.Errorf("Error getting containerd list output: (err: %v) output: %s", err, out)
 	}
@@ -150,21 +173,21 @@ func (r *CtrDriver) Clean() error {
 			switch ctr.State() {
 			case "running":
 				log.Infof("Attempting stop and remove on container %q", ctr.Name())
-				r.Stop(ctr)
-				r.Remove(ctr)
+				r.Stop(ctx, ctr)
+				r.Remove(ctx, ctr)
 			case "paused":
 				log.Infof("Attempting unpause and removal of container %q", ctr.Name())
-				r.Unpause(ctr)
-				r.Remove(ctr)
+				r.Unpause(ctx, ctr)
+				r.Remove(ctx, ctr)
 			case "stopped":
 				log.Infof("Attempting remove of container %q", ctr.Name())
-				r.Remove(ctr)
+				r.Remove(ctx, ctr)
 			default:
 				log.Warnf("Unknown state %q for ctr %q", ctr.State(), ctr.Name())
 			}
 		}
 		tries++
-		out, err := utils.ExecCmd(r.ctrBinary, "containers")
+		out, err := utils.ExecCmd(ctx, r.ctrBinary, "containers")
 		if err != nil {
 			return fmt.Errorf("Error getting containerd list output: %v", err)
 		}
@@ -175,31 +198,31 @@ func (r *CtrDriver) Clean() error {
 }
 
 // Run will execute a container using the containerd driver.
-func (r *CtrDriver) Run(ctr Container) (string, int, error) {
+func (r *CtrDriver) Run(ctx context.Context, ctr Container) (string, time.Duration, error) {
 	args := fmt.Sprintf("containers start %s %s", ctr.Name(), ctr.Image())
 	// the "NoOut" variant of ExecTimedCmd ignores stdin/out/err (sets them to /dev/null)
-	return utils.ExecTimedCmdNoOut(r.ctrBinary, args)
+	return utils.ExecTimedCmdNoOut(ctx, r.ctrBinary, args)
 }
 
 // Stop will stop/kill a container
-func (r *CtrDriver) Stop(ctr Container) (string, int, error) {
-	return utils.ExecTimedCmd(r.ctrBinary, "containers kill "+ctr.Name())
+func (r *CtrDriver) Stop(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return utils.ExecTimedCmd(ctx, r.ctrBinary, "containers kill "+ctr.Name())
 }
 
 // Remove will remove a container; in the containerd case we simply call kill
 // which will remove any container metadata if it was running
-func (r *CtrDriver) Remove(ctr Container) (string, int, error) {
-	return utils.ExecTimedCmd(r.ctrBinary, "containers kill "+ctr.Name())
+func (r *CtrDriver) Remove(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return utils.ExecTimedCmd(ctx, r.ctrBinary, "containers kill "+ctr.Name())
 }
 
 // Pause will pause a container
-func (r *CtrDriver) Pause(ctr Container) (string, int, error) {
-	return utils.ExecTimedCmd(r.ctrBinary, "containers pause "+ctr.Name())
+func (r *CtrDriver) Pause(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return utils.ExecTimedCmd(ctx, r.ctrBinary, "containers pause "+ctr.Name())
 }
 
 // Unpause will unpause/resume a container
-func (r *CtrDriver) Unpause(ctr Container) (string, int, error) {
-	return utils.ExecTimedCmd(r.ctrBinary, "containers resume "+ctr.Name())
+func (r *CtrDriver) Unpause(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	return utils.ExecTimedCmd(ctx, r.ctrBinary, "containers resume "+ctr.Name())
 }
 
 // take the output of "runc list" and parse into container instances

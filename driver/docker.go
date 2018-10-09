@@ -1,91 +1,58 @@
 package driver
 
 import (
-	"bufio"
+	"context"
 	"fmt"
+	"io/ioutil"
+	"strconv"
 	"strings"
+	"time"
 
-	"github.com/estesp/bucketbench/utils"
-	log "github.com/sirupsen/logrus"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
+	docker "github.com/docker/docker/client"
+	"github.com/pkg/errors"
 )
 
-const defaultDockerBinary = "docker"
+const (
+	dockerContainerStopTimeout = 30 * time.Second
+	dockerDefaultPIDPath       = "/var/run/docker.pid"
+)
 
-// DockerDriver is an implementation of the driver interface for the Docker engine.
-// IMPORTANT: This implementation does not protect instance metadata for thread safely.
-// At this time there is no understood use case for multi-threaded use of this implementation.
+// DockerDriver is an implementation of the driver interface for the Docker engine using API
 type DockerDriver struct {
-	dockerBinary string
-	dockerInfo   string
+	client    *docker.Client
+	logConfig *container.LogConfig
 }
 
-// DockerContainer is an implementation of the container metadata needed for docker
-type DockerContainer struct {
-	name        string
-	imageName   string
-	cmdOverride string
-	detached    bool
-	trace       bool
-}
-
-// NewDockerDriver creates an instance of the docker driver, providing a path to the docker client binary
-func NewDockerDriver(binaryPath string) (Driver, error) {
-	if binaryPath == "" {
-		binaryPath = defaultDockerBinary
-	}
-	resolvedBinPath, err := utils.ResolveBinary(binaryPath)
+// NewDockerDriver creates an instance of Docker API driver.
+func NewDockerDriver(ctx context.Context, logDriver string, logOpts map[string]string) (*DockerDriver, error) {
+	client, err := docker.NewClientWithOpts()
 	if err != nil {
-		return &DockerDriver{}, err
+		return nil, err
 	}
+
+	// Make sure daemon is reachable
+	ping, err := client.Ping(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "daemon is unreachable")
+	}
+
+	client.NegotiateAPIVersionPing(ping)
+
 	driver := &DockerDriver{
-		dockerBinary: resolvedBinPath,
+		client: client,
 	}
-	driver.Info()
+
+	if logDriver != "" {
+		driver.logConfig = &container.LogConfig{
+			Type:   logDriver,
+			Config: logOpts,
+		}
+	}
+
 	return driver, nil
-}
-
-// newDockerContainer creates the metadata object of a docker-specific container with
-// image name, container runtime name, and any required additional information
-func newDockerContainer(name, image, cmd string, detached bool, trace bool) Container {
-	return &DockerContainer{
-		name:        name,
-		imageName:   image,
-		cmdOverride: cmd,
-		detached:    detached,
-		trace:       trace,
-	}
-}
-
-// Name returns the name of the container
-func (c *DockerContainer) Name() string {
-	return c.name
-}
-
-// Detached returns whether the container should be started in detached mode
-func (c *DockerContainer) Detached() bool {
-	return c.detached
-}
-
-// Trace returns whether the container should be started with tracing enabled
-func (c *DockerContainer) Trace() bool {
-	return c.trace
-}
-
-// Image returns the image name that Docker will use
-func (c *DockerContainer) Image() string {
-	return c.imageName
-}
-
-// Command returns the optional overriding command that Docker will use
-// when executing a container based on this container's image
-func (c *DockerContainer) Command() string {
-	return c.cmdOverride
-}
-
-//GetPodID return pod-id associated with container.
-//only used by CRI-based drivers
-func (c *DockerContainer) GetPodID() string {
-	return ""
 }
 
 // Type returns a driver.Type to indentify the driver implementation
@@ -93,144 +60,182 @@ func (d *DockerDriver) Type() Type {
 	return Docker
 }
 
-// Path returns the binary path of the docker binary in use
-func (d *DockerDriver) Path() string {
-	return d.dockerBinary
-}
-
-// Close allows the driver to handle any resource free/connection closing
-// as necessary. Docker has no need to perform any actions on close.
-func (d *DockerDriver) Close() error {
-	return nil
-}
-
-// Info returns
-func (d *DockerDriver) Info() (string, error) {
-	if d.dockerInfo != "" {
-		return d.dockerInfo, nil
-	}
-
-	infoStart := "docker driver (binary: " + d.dockerBinary + ")\n"
-	version, err := utils.ExecCmd(d.dockerBinary, "version")
-	info, err := utils.ExecCmd(d.dockerBinary, "info")
+// Info returns a short description about the docker server
+func (d *DockerDriver) Info(ctx context.Context) (string, error) {
+	info, err := d.client.Info(ctx)
 	if err != nil {
-		return "", fmt.Errorf("Error trying to retrieve docker daemon info: %v", err)
+		return "", errors.Wrap(err, "failed to query Docker info")
 	}
-	d.dockerInfo = infoStart + parseDaemonInfo(version, info)
-	return d.dockerInfo, nil
+
+	return fmt.Sprintf("Docker API (name: '%s', driver: '%s', version: '%s')", info.Name, info.Driver, info.ServerVersion), nil
+}
+
+// Path returns the binary (or socket) path related to the runtime in use
+func (d *DockerDriver) Path() string {
+	return ""
 }
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (d *DockerDriver) Create(name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+func (d *DockerDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
 	return newDockerContainer(name, image, cmdOverride, detached, trace), nil
 }
 
-// Clean will clean the environment; removing any exited containers
-func (d *DockerDriver) Clean() error {
-	// clean up any containers from a prior run
-	log.Info("Docker: Stopping any running containers created during bucketbench runs")
-	cmd := "docker stop `docker ps -qf name=bb-ctr-`"
-	out, err := utils.ExecShellCmd(cmd)
+// Clean removes used Docker containers
+func (d *DockerDriver) Clean(ctx context.Context) error {
+	listOpts := types.ContainerListOptions{
+		All:     true,
+		Filters: filters.NewArgs(filters.Arg("name", ContainerNamePrefix)),
+	}
+
+	containers, err := d.client.ContainerList(ctx, listOpts)
 	if err != nil {
-		// first make sure the error isn't simply that there were no
-		// containers to stop:
-		if !strings.Contains(out, "requires at least 1 argument") {
-			log.Warnf("Docker: Failed to stop running bb-ctr-* containers: %v (output: %s)", err, out)
+		return err
+	}
+
+	for _, instance := range containers {
+		rmOpts := types.ContainerRemoveOptions{
+			Force: true,
+		}
+
+		if err := d.client.ContainerRemove(ctx, instance.ID, rmOpts); err != nil {
+			return errors.Wrapf(err, "failed to remove instance with id '%s'", instance.ID)
 		}
 	}
-	log.Info("Docker: Removing exited containers from bucketbench runs")
-	cmd = "docker rm -f `docker ps -aqf name=bb-ctr-`"
-	out, err = utils.ExecShellCmd(cmd)
-	if err != nil {
-		// first make sure the error isn't simply that there were no
-		// exited containers to remove:
-		if !strings.Contains(out, "requires at least 1 argument") {
-			log.Warnf("Docker: Failed to remove exited bb-ctr-* containers: %v (output: %s)", err, out)
-		}
-	}
+
 	return nil
 }
 
-// Run will execute a container using the driver
-func (d *DockerDriver) Run(ctr Container) (string, int, error) {
-	var detached string
-	if ctr.Detached() {
-		detached = "-d"
+// Run creates a new Docker container and sends a request to the daemon to start it
+func (d *DockerDriver) Run(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	start := time.Now()
+
+	var config container.Config
+	var hostConfig container.HostConfig
+
+	config.Image = ctr.Image()
+
+	if ctr.Command() != "" {
+		config.Cmd = strings.Fields(ctr.Command())
 	}
-	args := fmt.Sprintf("run %s --name %s %s", detached, ctr.Name(), ctr.Image())
-	return utils.ExecTimedCmd(d.dockerBinary, args)
-}
 
-// Stop will stop/kill a container
-func (d *DockerDriver) Stop(ctr Container) (string, int, error) {
-	return utils.ExecTimedCmd(d.dockerBinary, "kill "+ctr.Name())
-}
-
-// Remove will remove a container
-func (d *DockerDriver) Remove(ctr Container) (string, int, error) {
-	return utils.ExecTimedCmd(d.dockerBinary, "rm "+ctr.Name())
-}
-
-// Pause will pause a container
-func (d *DockerDriver) Pause(ctr Container) (string, int, error) {
-	return utils.ExecTimedCmd(d.dockerBinary, "pause "+ctr.Name())
-}
-
-// Unpause will unpause/resume a container
-func (d *DockerDriver) Unpause(ctr Container) (string, int, error) {
-	return utils.ExecTimedCmd(d.dockerBinary, "unpause "+ctr.Name())
-}
-
-// return a condensed string of version and daemon information
-func parseDaemonInfo(version, info string) string {
-	var (
-		clientVer string
-		clientAPI string
-		serverVer string
-	)
-	vReader := strings.NewReader(version)
-	vScan := bufio.NewScanner(vReader)
-
-	for vScan.Scan() {
-		line := vScan.Text()
-		parts := strings.Split(line, ":")
-		switch strings.TrimSpace(parts[0]) {
-		case "Version":
-			if clientVer == "" {
-				// first time is client
-				clientVer = strings.TrimSpace(parts[1])
-			} else {
-				serverVer = strings.TrimSpace(parts[1])
-			}
-		case "API version":
-			if clientAPI == "" {
-				// first instance is client
-				clientAPI = parts[1]
-				clientVer = clientVer + "|API:" + strings.TrimSpace(parts[1])
-			} else {
-				serverVer = serverVer + "|API:" + strings.TrimSpace(parts[1])
-			}
-		default:
-		}
-
+	if d.logConfig != nil {
+		hostConfig.LogConfig = *d.logConfig
 	}
-	iReader := strings.NewReader(info)
-	iScan := bufio.NewScanner(iReader)
 
-	for iScan.Scan() {
-		line := iScan.Text()
-		parts := strings.Split(line, ":")
-		switch strings.TrimSpace(parts[0]) {
-		case "Kernel Version":
-			serverVer = serverVer + "|Kernel:" + strings.TrimSpace(parts[1])
-		case "Storage Driver":
-			serverVer = serverVer + "|Storage:" + strings.TrimSpace(parts[1])
-		case "Backing Filesystem":
-			serverVer = serverVer + "|BackingFS:" + strings.TrimSpace(parts[1])
-		default:
-		}
-
+	if _, err := d.client.ContainerCreate(ctx, &config, &hostConfig, nil, ctr.Name()); err != nil {
+		return "", 0, errors.Wrapf(err, "couldn't create container '%s'", ctr.Name())
 	}
-	return fmt.Sprintf("[CLIENT:%s][SERVER:%s]", clientVer, serverVer)
+
+	opts := types.ContainerStartOptions{}
+	if err := d.client.ContainerStart(ctx, ctr.Name(), opts); err != nil {
+		return "", 0, errors.Wrapf(err, "failed to start container '%s'", ctr.Name())
+	}
+
+	return "", time.Since(start), nil
+}
+
+// Stop stops a container
+func (d *DockerDriver) Stop(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	start := time.Now()
+
+	timeout := dockerContainerStopTimeout
+	if err := d.client.ContainerStop(ctx, ctr.Name(), &timeout); err != nil {
+		return "", 0, errors.Wrapf(err, "failed to stop container '%s'", ctr.Name())
+	}
+
+	return "", time.Since(start), nil
+}
+
+// Remove kills and removes a container
+func (d *DockerDriver) Remove(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	start := time.Now()
+
+	opts := types.ContainerRemoveOptions{Force: true}
+	if err := d.client.ContainerRemove(ctx, ctr.Name(), opts); err != nil {
+		return "", 0, errors.Wrapf(err, "failed to remove container: '%s'", ctr.Name())
+	}
+
+	return "", time.Since(start), nil
+}
+
+// Pause pauses a container
+func (d *DockerDriver) Pause(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	start := time.Now()
+
+	if err := d.client.ContainerPause(ctx, ctr.Name()); err != nil {
+		return "", 0, nil
+	}
+
+	return "", time.Since(start), nil
+}
+
+// Unpause unpauses a container
+func (d *DockerDriver) Unpause(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	start := time.Now()
+
+	if err := d.client.ContainerUnpause(ctx, ctr.Name()); err != nil {
+		return "", 0, errors.Wrapf(err, "failed to unpause container: '%s'", ctr.Name())
+	}
+
+	return "", time.Since(start), nil
+}
+
+// Wait will block until container stop
+func (d *DockerDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
+	start := time.Now()
+
+	waitC, errC := d.client.ContainerWait(ctx, ctr.Name(), container.WaitConditionNotRunning)
+
+	select {
+	case err := <-errC:
+		return "", 0, errors.Wrapf(err, "failed to wait container: '%s'", ctr.Name())
+	case <-waitC:
+		return "", time.Since(start), nil
+	}
+}
+
+// Close closes the transport used by Docker client
+func (d *DockerDriver) Close() error {
+	return d.client.Close()
+}
+
+// PID returns a process ID of Docker daemon
+func (d *DockerDriver) PID() (int, error) {
+	return getDockerPID("")
+}
+
+// ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
+func (d *DockerDriver) ProcNames() []string {
+	return dockerProcNames
+}
+
+// Metrics returns stats data from daemon for container
+func (d *DockerDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
+	stats, err := d.client.ContainerStats(ctx, ctr.Name(), false)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get stats for container: '%s'", ctr.Name())
+	}
+
+	defer stats.Body.Close()
+
+	data, err := ioutil.ReadAll(stats.Body)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to read stats for container: '%s'", ctr.Name())
+	}
+
+	return data, nil
+}
+
+func getDockerPID(path string) (int, error) {
+	if path == "" {
+		path = dockerDefaultPIDPath
+	}
+
+	buf, err := ioutil.ReadFile(path)
+	if err != nil {
+		return 0, errors.Wrap(err, "could not read Docker pid file")
+	}
+
+	return strconv.Atoi(string(buf))
 }
