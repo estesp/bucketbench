@@ -173,6 +173,15 @@ bucketbench as a dynamic or static binary. `make binary` will build the
 `bucketbench` binary and `make install` will place it in your `$PATH`. You
 should also be able to simply `go install github.com/estesp/bucketbench`.
 
+## Caveats and limitations
+
+- Overhead benchmark implementation only covers `Docker` and `Containerd`
+- The benchmark uses process name matching to find relevant processes; you must 
+keep the expected process names (`dockerd`, `docker-containerd`, and `docker-containerd-shim`
+for Docker and `containerd` and `containerd-shim` for containerd) and not run 
+additional processes with the same names.
+
+
 ## TODOs
 
  - Decide what to do with the `-trace` flag, which was only useful with a private build of `runc` which generated Go pprof traces. Possibly submit trace support to upstream runc.
