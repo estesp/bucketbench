@@ -5,13 +5,12 @@ import (
 	"sort"
 	"time"
 
-	"github.com/estesp/bucketbench/utils"
+	"github.com/estesp/bucketbench/stats"
 	log "github.com/sirupsen/logrus"
 )
 
 const (
 	procMetricsSampleInterval = 500 * time.Millisecond
-	bytesInMiB                = 1024 * 1024
 )
 
 // OverheadBench runs CustomBench benchmarks and measure memory and cpu usage of a container daemon
@@ -22,43 +21,31 @@ type OverheadBench struct {
 // Run executes the benchmark iterations against a specific engine driver type
 // for a specified number of iterations
 func (b *OverheadBench) Run(ctx context.Context, threads, iterations int, commands []string) error {
-	pid, err := b.driver.PID()
+	sampler, err := stats.NewSampler(b.driver)
 	if err != nil {
-		log.WithError(err).Errorf("could not find daemon with pid: %d", pid)
+		log.WithError(err).Error("failed to create stats sampler")
 		return err
 	}
 
-	log.Infof("daemon pid: %d", pid)
-	daemonProc, err := utils.NewProcFromPID(pid, b.driver.ProcNames())
-	if err != nil {
-		log.WithError(err).Errorf("could not get proc info: %v", err)
-		return err
-	}
+	defer sampler.Close()
 
 	var metrics []RunStatistics
-
 	ticker := time.NewTicker(procMetricsSampleInterval)
 
 	go func() {
 		for range ticker.C {
-			mem, memErr := daemonProc.Mem()
-			if memErr != nil {
-				log.WithError(memErr).Error("could not get memory info")
+			result, err := sampler.Query()
+			if err != nil {
+				log.WithError(err).Error("stats sample failed")
+				continue
 			}
 
-			cpu, cpuErr := daemonProc.CPU()
-			if cpuErr != nil {
-				log.WithError(cpuErr).Error("could not get cpu info")
+			stat := RunStatistics{
+				Timestamp: time.Now().UTC(),
+				Daemon:    result,
 			}
 
-			if memErr == nil || cpuErr == nil {
-				stat := RunStatistics{
-					Timestamp: time.Now().UTC(),
-					Daemon:    &ProcMetrics{Mem: mem / bytesInMiB, CPU: cpu},
-				}
-
-				metrics = append(metrics, stat)
-			}
+			metrics = append(metrics, stat)
 		}
 	}()
 

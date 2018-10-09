@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/estesp/bucketbench/driver"
+	"github.com/estesp/bucketbench/stats"
 )
 
 // State represents the state of a benchmark object
@@ -21,13 +22,7 @@ type RunStatistics struct {
 	Durations map[string]time.Duration
 	Errors    map[string]int
 	Timestamp time.Time
-	Daemon    *ProcMetrics
-}
-
-// ProcMetrics represents stats sample from daemon
-type ProcMetrics struct {
-	Mem uint64
-	CPU float64
+	Daemon    *stats.ProcMetrics
 }
 
 // Benchmark is the object form of a YAML-defined custom benchmark
