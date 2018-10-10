@@ -41,7 +41,3 @@ func (s *PSUtilSampler) Query() (*ProcMetrics, error) {
 		CPU: cpu,
 	}, nil
 }
-
-func (s *PSUtilSampler) Close() error {
-	return nil
-}

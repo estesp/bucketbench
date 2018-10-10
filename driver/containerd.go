@@ -245,7 +245,7 @@ func (r *ContainerdDriver) Info(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf("containerd gRPC client driver (daemon: '%s', revision: '%s')", version.Version, version.Revision), nil
+	return fmt.Sprintf("containerd (version: '%s', revision: '%s')", version.Version, version.Revision), nil
 }
 
 // Create will create a container instance matching the specific needs

@@ -249,6 +249,6 @@ func (cb *CustomBench) Type() Type {
 }
 
 // Info returns a string with the driver type and custom benchmark name
-func (cb *CustomBench) Info() string {
-	return fmt.Sprintf("%s:%s", cb.benchName, cb.driver.Type())
+func (cb *CustomBench) Info(ctx context.Context) (string, error) {
+	return cb.driver.Info(ctx)
 }

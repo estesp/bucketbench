@@ -16,18 +16,17 @@ const (
 // OverheadBench runs CustomBench benchmarks and measure memory and cpu usage of a container daemon
 type OverheadBench struct {
 	CustomBench
+	cgroupPath string
 }
 
 // Run executes the benchmark iterations against a specific engine driver type
 // for a specified number of iterations
 func (b *OverheadBench) Run(ctx context.Context, threads, iterations int, commands []string) error {
-	sampler, err := stats.NewSampler(b.driver)
+	sampler, err := stats.NewSampler(b.driver, b.cgroupPath)
 	if err != nil {
 		log.WithError(err).Error("failed to create stats sampler")
 		return err
 	}
-
-	defer sampler.Close()
 
 	var metrics []RunStatistics
 	ticker := time.NewTicker(procMetricsSampleInterval)

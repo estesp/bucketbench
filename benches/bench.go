@@ -46,6 +46,7 @@ type DriverConfig struct {
 	Iterations       int
 	LogDriver        string            `yaml:"logDriver"`
 	LogOpts          map[string]string `yaml:"logOpts"`
+	CGroupPath       string            `yaml:"cgroupPath"`
 	StreamStats      bool              `yaml:"streamStats"`
 	StatsIntervalSec int               `yaml:"statsIntervalSec"`
 }
@@ -99,7 +100,7 @@ type Bench interface {
 	Type() Type
 
 	// Info returns a string with the driver type and custom benchmark name
-	Info() string
+	Info(ctx context.Context) (string, error)
 }
 
 // New creates an instance of the selected benchmark type
@@ -131,8 +132,21 @@ func New(benchType Type, config *DriverConfig) (Bench, error) {
 			return &custom, nil
 		}
 
-		return &OverheadBench{CustomBench: custom}, nil
+		return &OverheadBench{CustomBench: custom, cgroupPath: config.CGroupPath}, nil
 	default:
 		return nil, fmt.Errorf("no such benchmark type: %v", benchType)
+	}
+}
+
+func (b Type) String() string {
+	switch b {
+	case Limit:
+		return "Limit"
+	case Custom:
+		return "Custom"
+	case Overhead:
+		return "Overhead"
+	default:
+		return "Unknown"
 	}
 }

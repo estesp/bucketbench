@@ -72,7 +72,7 @@ func (d *DockerDriver) Info(ctx context.Context) (string, error) {
 		return "", errors.Wrap(err, "failed to query Docker info")
 	}
 
-	return fmt.Sprintf("Docker API (name: '%s', driver: '%s', version: '%s')", info.Name, info.Driver, info.ServerVersion), nil
+	return fmt.Sprintf("Docker API (version: '%s')", info.ServerVersion), nil
 }
 
 // Path returns the binary (or socket) path related to the runtime in use

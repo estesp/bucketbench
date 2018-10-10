@@ -94,6 +94,6 @@ func (lb *LimitBench) Type() Type {
 }
 
 // Info returns a string with the driver type and custom benchmark name
-func (lb *LimitBench) Info() string {
-	return "Limit benchmark: No driver"
+func (lb *LimitBench) Info(ctx context.Context) (string, error) {
+	return "Limit benchmark: No driver", nil
 }
