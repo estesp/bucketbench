@@ -227,7 +227,7 @@ func (r *ContainerdDriver) Create(ctx context.Context, name, image, cmdOverride 
 	if _, err := r.client.GetImage(ctx, fullImageName); err != nil {
 		// if the image isn't already in our namespaced context, then pull it
 		// using the reference and default resolver (most likely DockerHub)
-		if _, err := r.client.Pull(ctx, fullImageName, containerd.WithPullUnpack); err != nil {
+		if _, err := r.client.Pull(ctx, fullImageName, containerd.WithPullUnpack, containerd.WithSchema1Conversion); err != nil {
 			// error pulling the image
 			return nil, err
 		}
