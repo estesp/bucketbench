@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -75,9 +76,29 @@ func (d *DockerDriver) Path() string {
 	return ""
 }
 
-// Create will create a container instance matching the specific needs
-// of a driver
+// Create will pull and create a container instance matching the specific needs of a driver
 func (d *DockerDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+	// Make sure the Docker image is available locally
+	images, err := d.client.ImageList(ctx, types.ImageListOptions{
+		Filters: filters.NewArgs(filters.Arg("reference", image)),
+	})
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to query image list")
+	}
+
+	if len(images) == 0 {
+		reader, err := d.client.ImagePull(ctx, image, types.ImagePullOptions{})
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to pull image: '%s'", image)
+		}
+
+		defer reader.Close()
+
+		// We don't want image content here, just make Docker pulling the image till end
+		io.Copy(ioutil.Discard, reader)
+	}
+
 	return newDockerContainer(name, image, cmdOverride, detached, trace), nil
 }
 
