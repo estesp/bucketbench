@@ -45,12 +45,14 @@ type Benchmark struct {
 // DriverConfig contains the YAML-defined parameters for running a
 // benchmark against a specific driver type
 type DriverConfig struct {
-	Type       string
-	ClientPath string // optional path to specific client binary/socket
-	Threads    int
-	Iterations int
-	LogDriver  string            `yaml:"logDriver"`
-	LogOpts    map[string]string `yaml:"logOpts"`
+	Type             string
+	ClientPath       string // optional path to specific client binary/socket
+	Threads          int
+	Iterations       int
+	LogDriver        string            `yaml:"logDriver"`
+	LogOpts          map[string]string `yaml:"logOpts"`
+	StreamStats      bool              `yaml:"streamStats"`
+	StatsIntervalSec int               `yaml:"statsIntervalSec"`
 }
 
 // State constants
@@ -76,7 +78,6 @@ const (
 
 // Bench is an interface to manage benchmark execution against a specific driver
 type Bench interface {
-
 	// Init initializes the benchmark (for example, verifies a daemon is running for daemon-centric
 	// engines, pre-pulls images, etc.)
 	Init(ctx context.Context, name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error
@@ -107,23 +108,35 @@ type Bench interface {
 }
 
 // New creates an instance of the selected benchmark type
-func New(benchType Type, logDriver string, logOpts map[string]string) (Bench, error) {
+func New(benchType Type, config *DriverConfig) (Bench, error) {
 	switch benchType {
 	case Limit:
 		return &LimitBench{
 			state: Created,
 		}, nil
-	case Custom:
-		return &CustomBench{
-			state:     Created,
-			logDriver: logDriver,
-		}, nil
-	case Overhead:
-		bench := &OverheadBench{}
-		bench.state = Created
-		bench.logDriver = logDriver
-		bench.logOpts = logOpts
-		return bench, nil
+
+	case Custom, Overhead:
+		if config.StatsIntervalSec == 0 {
+			config.StatsIntervalSec = 1
+		}
+
+		statsInterval := time.Duration(config.StatsIntervalSec) * time.Second
+
+		custom := CustomBench{
+			state: Created,
+			Config: driver.Config{
+				LogDriver:     config.LogDriver,
+				LogOpts:       config.LogOpts,
+				StreamStats:   config.StreamStats,
+				StatsInterval: statsInterval,
+			},
+		}
+
+		if benchType == Custom {
+			return &custom, nil
+		}
+
+		return &OverheadBench{CustomBench: custom}, nil
 	default:
 		return nil, fmt.Errorf("no such benchmark type: %v", benchType)
 	}

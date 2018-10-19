@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -28,6 +29,7 @@ type DockerCLIDriver struct {
 	dockerInfo   string
 	logDriver    string
 	logOpts      map[string]string
+	streamStats  bool
 }
 
 // DockerContainer is an implementation of the container metadata needed for docker
@@ -40,7 +42,8 @@ type DockerContainer struct {
 }
 
 // NewDockerCLIDriver creates an instance of the docker driver, providing a path to the docker client binary
-func NewDockerCLIDriver(ctx context.Context, binaryPath string, logDriver string, logOpts map[string]string) (Driver, error) {
+func NewDockerCLIDriver(ctx context.Context, config *Config) (Driver, error) {
+	binaryPath := config.Path
 	if binaryPath == "" {
 		binaryPath = defaultDockerBinary
 	}
@@ -52,8 +55,9 @@ func NewDockerCLIDriver(ctx context.Context, binaryPath string, logDriver string
 
 	driver := &DockerCLIDriver{
 		dockerBinary: resolvedBinPath,
-		logDriver:    logDriver,
-		logOpts:      logOpts,
+		logDriver:    config.LogDriver,
+		logOpts:      config.LogOpts,
+		streamStats:  config.StreamStats,
 	}
 
 	info, err := driver.Info(ctx)
@@ -61,7 +65,7 @@ func NewDockerCLIDriver(ctx context.Context, binaryPath string, logDriver string
 		return nil, err
 	}
 
-	log.Debugf("running docker CLI driver: '%s', log driver: '%s'", info, logDriver)
+	log.Debugf("running docker CLI driver: '%s', log driver: '%s'", info, config.LogDriver)
 	return driver, nil
 }
 
@@ -229,10 +233,16 @@ func (d *DockerCLIDriver) Unpause(ctx context.Context, ctr Container) (string, t
 	return utils.ExecTimedCmd(ctx, d.dockerBinary, "unpause "+ctr.Name())
 }
 
-// Metrics returns stats data from daemon for container
-func (d *DockerCLIDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
-	output, err := utils.ExecCmd(ctx, d.dockerBinary, "stats --no-stream "+ctr.Name())
-	return output, err
+// Stats returns stats data from daemon for container
+func (d *DockerCLIDriver) Stats(ctx context.Context, ctr Container) (io.ReadCloser, error) {
+	var args string
+	if d.streamStats {
+		args = "stats " + ctr.Name()
+	} else {
+		args = "stats --no-stream " + ctr.Name()
+	}
+
+	return utils.ExecCmdStream(ctx, d.dockerBinary, args)
 }
 
 // ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -126,8 +127,8 @@ func (r *RuncDriver) Wait(ctx context.Context, ctr Container) (string, time.Dura
 	return "", 0, errors.New("not implemented")
 }
 
-// Metrics returns stats data from daemon for container
-func (r *RuncDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
+// Stats returns stats data from daemon for container
+func (r *RuncDriver) Stats(ctx context.Context, ctr Container) (io.ReadCloser, error) {
 	return nil, errors.New("not implemented")
 }
 

@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 )
 
@@ -105,52 +106,60 @@ type Driver interface {
 	// ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
 	ProcNames() []string
 
-	// Metrics returns stats data from daemon for container
-	Metrics(ctx context.Context, ctr Container) (interface{}, error)
+	// Stats returns a reader with streaming data output
+	Stats(ctx context.Context, ctr Container) (io.ReadCloser, error)
+}
+
+// Config represents various configuration flags for driver
+type Config struct {
+	DriverType    Type
+	Path          string
+	LogDriver     string
+	LogOpts       map[string]string
+	StreamStats   bool
+	StatsInterval time.Duration
 }
 
 // New creates a driver instance of a specific type
-func New(ctx context.Context, driverType Type, path string, logDriver string, logOpts map[string]string) (Driver, error) {
-	switch driverType {
+func New(ctx context.Context, config *Config) (Driver, error) {
+	switch config.DriverType {
 	case Runc:
-		return NewRuncDriver(path)
+		return NewRuncDriver(config.Path)
 	case DockerCLI:
-		return NewDockerCLIDriver(ctx, path, logDriver, logOpts)
+		return NewDockerCLIDriver(ctx, config)
 	case Docker:
-		return NewDockerDriver(ctx, logDriver, logOpts)
+		return NewDockerDriver(ctx, config)
 	case Containerd:
-		return NewContainerdDriver(path)
+		return NewContainerdDriver(config)
 	case Ctr:
-		return NewCtrDriver(path)
+		return NewCtrDriver(config.Path)
 	case CRI:
-		return NewCRIDriver(path)
+		return NewCRIDriver(config.Path)
 	case Null:
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("no such driver type: %v", driverType)
+		return nil, fmt.Errorf("no such driver type: %s", config.DriverType)
 	}
 }
 
-// TypeToString converts a driver Type into its string representation
-func TypeToString(dtype Type) string {
-	var driverType string
-	switch dtype {
+// String converts a driver Type into its string representation
+func (driverType Type) String() string {
+	switch driverType {
 	case DockerCLI:
-		driverType = "DockerCLI"
+		return "DockerCLI"
 	case Docker:
-		driverType = "Docker"
+		return "Docker"
 	case Containerd:
-		driverType = "Containerd"
+		return "Containerd"
 	case Ctr:
-		driverType = "Ctr"
+		return "Ctr"
 	case Runc:
-		driverType = "Runc"
+		return "Runc"
 	case CRI:
-		driverType = "CRI"
+		return "CRI"
 	default:
-		driverType = "(unknown)"
+		return "(unknown)"
 	}
-	return driverType
 }
 
 // StringToType converts a driver stringified typename into its Type

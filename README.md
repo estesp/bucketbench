@@ -97,7 +97,9 @@ Each driver has the following settings:
  - **threads**: Integer number of concurrent threads to run. The `bucketbench` method is to execute 1..n runs, where `n` is the number of threads and each run adds another concurrent thread. **Run 1** only has one thread and **Run N** will have `n` concurrent threads.
  - **iterations**: Number of containers to create in each thread and execute the listed commands against.
  - **logDriver**: `Docker` and `DockerCLI` support log driver configuration to measure overhead between different implementations. Allowed values can be found [here](https://docs.docker.com/config/containers/logging/configure/#supported-logging-drivers).
- - **logOpts**: logger driver configuration, only used with `logDriver` option. See `overhead-logdriver.yaml` for examples.
+ - **logOpts**: Logger driver configuration, only used with `logDriver` option. See `overhead-logdriver.yaml` for examples.
+ - **streamStats**: Allows to explore the overhead of `stats` queries for different drivers. Note that `docker` driver supports streaming natively while `containerd` supports direct API calls only, so you might want to send multiple queries to emulate streaming behavior (see **statsIntervalSec**)
+ - **statsIntervalSec**: Defines an interval in seconds between `stats` queries to emulate streaming behaviour for `containerd`
 
 #### Command List
 
@@ -109,7 +111,7 @@ The following commands are accepted as input:
  - **unpause**: (aliases: **resume**) resume a paused container
  - **stop**: (aliases: **kill**) stop/kill the running container processes
  - **remove**: (aliases: **erase**,**delete**) remove/delete a container instance
- - **metrics**: (aliases: **stats**) query container daemon metrics
+ - **metrics**: (aliases: **stats**) query container daemon stats. Note: if `streamStats = true`, each **metrics** command will spawn separate goroutine and will stream metrics untill end of iteration.
  - **wait**: wait for container stop
 
 Note that `bucketbench` is not handling any formal state validation on the list
@@ -176,6 +178,7 @@ should also be able to simply `go install github.com/estesp/bucketbench`.
 ## Caveats and limitations
 
 - Overhead benchmark implementation only covers `Docker` and `Containerd`
+- Stats streaming are only supported by `Docker`, `DockerCLI` and `Containerd` drivers
 - The benchmark uses process name matching to find relevant processes; you must 
 keep the expected process names (`dockerd`, `docker-containerd`, and `docker-containerd-shim`
 for Docker and `containerd` and `containerd-shim` for containerd) and not run 

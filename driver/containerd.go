@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"syscall"
 	"time"
@@ -33,8 +34,10 @@ var containerdProcNames = []string{
 // IMPORTANT: This implementation does not protect instance metadata for thread safely.
 // At this time there is no understood use case for multi-threaded use of this implementation.
 type ContainerdDriver struct {
-	ctrdAddress string
-	client      *containerd.Client
+	ctrdAddress   string
+	client        *containerd.Client
+	streamStats   bool
+	statsInterval time.Duration
 }
 
 // ContainerdContainer is an implementation of the container metadata needed for containerd
@@ -48,7 +51,8 @@ type ContainerdContainer struct {
 }
 
 // NewContainerdDriver creates an instance of the containerd driver, providing a path to the ctr client
-func NewContainerdDriver(path string) (*ContainerdDriver, error) {
+func NewContainerdDriver(config *Config) (*ContainerdDriver, error) {
+	path := config.Path
 	if path == "" {
 		path = defaultContainerdPath
 	}
@@ -59,8 +63,10 @@ func NewContainerdDriver(path string) (*ContainerdDriver, error) {
 	}
 
 	driver := &ContainerdDriver{
-		ctrdAddress: path,
-		client:      client,
+		ctrdAddress:   path,
+		client:        client,
+		streamStats:   config.StreamStats,
+		statsInterval: config.StatsInterval,
 	}
 
 	return driver, nil
@@ -181,8 +187,8 @@ func (r *ContainerdDriver) ProcNames() []string {
 	return containerdProcNames
 }
 
-// Metrics returns stats data from daemon for container
-func (r *ContainerdDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
+// Stats returns stats data from daemon for container
+func (r *ContainerdDriver) Stats(ctx context.Context, ctr Container) (io.ReadCloser, error) {
 	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
 
 	container, err := r.client.LoadContainer(ctx, ctr.Name())
@@ -195,12 +201,39 @@ func (r *ContainerdDriver) Metrics(ctx context.Context, ctr Container) (interfac
 		return nil, err
 	}
 
-	metrics, err := task.Metrics(ctx)
-	if err != nil {
-		return nil, err
-	}
+	reader, writer := io.Pipe()
 
-	return metrics, nil
+	go func() {
+		ticker := time.NewTicker(r.statsInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				writer.CloseWithError(ctx.Err())
+				return
+			case <-ticker.C:
+				metrics, err := task.Metrics(ctx)
+				if err != nil {
+					writer.CloseWithError(err)
+					return
+				}
+
+				if _, err := writer.Write(metrics.Data.Value); err != nil {
+					writer.CloseWithError(err)
+					return
+				}
+
+				// If no streaming, run just 1 iteration
+				if !r.streamStats {
+					writer.Close()
+					return
+				}
+			}
+		}
+	}()
+
+	return reader, nil
 }
 
 // Info returns

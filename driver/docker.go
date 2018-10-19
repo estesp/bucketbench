@@ -19,16 +19,19 @@ import (
 const (
 	dockerContainerStopTimeout = 30 * time.Second
 	dockerDefaultPIDPath       = "/var/run/docker.pid"
+	// dockerStreamingCopySize is an approximate response size of stat call via Docker API
+	dockerStreamingCopySize    = 2048
 )
 
 // DockerDriver is an implementation of the driver interface for the Docker engine using API
 type DockerDriver struct {
-	client    *docker.Client
-	logConfig *container.LogConfig
+	client      *docker.Client
+	logConfig   *container.LogConfig
+	streamStats bool
 }
 
 // NewDockerDriver creates an instance of Docker API driver.
-func NewDockerDriver(ctx context.Context, logDriver string, logOpts map[string]string) (*DockerDriver, error) {
+func NewDockerDriver(ctx context.Context, config *Config) (*DockerDriver, error) {
 	client, err := docker.NewClientWithOpts()
 	if err != nil {
 		return nil, err
@@ -43,13 +46,14 @@ func NewDockerDriver(ctx context.Context, logDriver string, logOpts map[string]s
 	client.NegotiateAPIVersionPing(ping)
 
 	driver := &DockerDriver{
-		client: client,
+		client:      client,
+		streamStats: config.StreamStats,
 	}
 
-	if logDriver != "" {
+	if config.LogDriver != "" {
 		driver.logConfig = &container.LogConfig{
-			Type:   logDriver,
-			Config: logOpts,
+			Type:   config.LogDriver,
+			Config: config.LogOpts,
 		}
 	}
 
@@ -231,21 +235,36 @@ func (d *DockerDriver) ProcNames() []string {
 	return dockerProcNames
 }
 
-// Metrics returns stats data from daemon for container
-func (d *DockerDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
-	stats, err := d.client.ContainerStats(ctx, ctr.Name(), false)
+// Stats returns stats data from daemon for container
+func (d *DockerDriver) Stats(ctx context.Context, ctr Container) (io.ReadCloser, error) {
+	stats, err := d.client.ContainerStats(ctx, ctr.Name(), d.streamStats)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get stats for container: '%s'", ctr.Name())
 	}
 
-	defer stats.Body.Close()
+	reader, writer := io.Pipe()
 
-	data, err := ioutil.ReadAll(stats.Body)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to read stats for container: '%s'", ctr.Name())
-	}
+	go func() {
+		defer stats.Body.Close()
 
-	return data, nil
+		buf := make([]byte, dockerStreamingCopySize)
+
+		for {
+			select {
+			case <-ctx.Done():
+				writer.CloseWithError(ctx.Err())
+				return
+			default:
+				limitReader := io.LimitReader(stats.Body, dockerStreamingCopySize)
+				if written, err := io.CopyBuffer(writer, limitReader, buf); err != nil || written == 0 {
+					writer.CloseWithError(err)
+					return
+				}
+			}
+		}
+	}()
+
+	return reader, nil
 }
 
 func getDockerPID(path string) (int, error) {

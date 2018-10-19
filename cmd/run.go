@@ -135,7 +135,7 @@ func runLimitTest(ctx context.Context) []float64 {
 	var rates []float64
 	// get thread limit stats
 	for i := 1; i <= defaultLimitThreads; i++ {
-		limit, _ := benches.New(benches.Limit, "", nil)
+		limit, _ := benches.New(benches.Limit, &benches.DriverConfig{})
 		limit.Init(ctx, "", driver.Null, "", "", "", trace)
 		limit.Run(ctx, i, defaultLimitIter, nil)
 		duration := limit.Elapsed()
@@ -156,7 +156,7 @@ func runBenchmark(ctx context.Context, benchType benches.Type, driverConfig benc
 	stats = make([][]benches.RunStatistics, driverConfig.Threads)
 
 	for i := 1; i <= driverConfig.Threads; i++ {
-		bench, _ := benches.New(benchType, driverConfig.LogDriver, driverConfig.LogOpts)
+		bench, _ := benches.New(benchType, &driverConfig)
 		imageInfo := benchmark.Image
 		if driverType == driver.Runc || driverType == driver.Ctr {
 			// legacy ctr mode and runc drivers need an exploded rootfs
