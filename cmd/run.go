@@ -187,11 +187,12 @@ func runBenchmark(ctx context.Context, benchType benches.Type, driverConfig benc
 		}
 
 		if driverInfo == "" {
-			if info, err := bench.Info(ctx); err != nil {
+			info, err := bench.Info(ctx)
+			if err != nil {
 				return benchResult{}, errors.Wrap(err, "failed to query driver info")
-			} else {
-				driverInfo = info
 			}
+
+			driverInfo = info
 		}
 
 		err = bench.Run(ctx, i, driverConfig.Iterations, benchmark.Commands)

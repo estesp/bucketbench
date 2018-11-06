@@ -7,10 +7,12 @@ import (
 
 const bytesInMiB = 1024 * 1024
 
+// PSUtilSampler represents ps util sampler
 type PSUtilSampler struct {
 	proc *utils.Proc
 }
 
+// NewPSUtilSampler creates a new ps util sampler
 func NewPSUtilSampler(proc Process) (*PSUtilSampler, error) {
 	pid, err := proc.PID()
 	if err != nil {
@@ -25,6 +27,7 @@ func NewPSUtilSampler(proc Process) (*PSUtilSampler, error) {
 	return &PSUtilSampler{daemonProc}, nil
 }
 
+// Query gets a process metrics
 func (s *PSUtilSampler) Query() (*ProcMetrics, error) {
 	mem, memErr := s.proc.Mem()
 	if memErr != nil {

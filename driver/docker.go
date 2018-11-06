@@ -20,7 +20,7 @@ const (
 	dockerContainerStopTimeout = 30 * time.Second
 	dockerDefaultPIDPath       = "/var/run/docker.pid"
 	// dockerStreamingCopySize is an approximate response size of stat call via Docker API
-	dockerStreamingCopySize    = 2048
+	dockerStreamingCopySize = 2048
 )
 
 // DockerDriver is an implementation of the driver interface for the Docker engine using API

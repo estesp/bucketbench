@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// CGroupsSampler represents Linux cgroups sampler
 type CGroupsSampler struct {
 	control      cgroups.Cgroup
 	lastCPUUsage uint64
@@ -15,11 +16,12 @@ type CGroupsSampler struct {
 
 // NewCGroupsSampler creates a stats sampler from existing control group
 func NewCGroupsSampler(path string) (*CGroupsSampler, error) {
-	if control, err := cgroups.Load(reportControllers, cgroups.StaticPath(path)); err != nil {
+	control, err := cgroups.Load(reportControllers, cgroups.StaticPath(path))
+	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load cgroup: '%s'", path)
-	} else {
-		return &CGroupsSampler{control: control}, nil
 	}
+
+	return &CGroupsSampler{control: control}, nil
 }
 
 // reportControllers returns v1 controllers only required for measuring resource usage
@@ -29,7 +31,7 @@ func reportControllers() ([]cgroups.Subsystem, error) {
 		return nil, err
 	}
 
-	var out[]cgroups.Subsystem
+	var out []cgroups.Subsystem
 	for _, sub := range v1 {
 		if sub.Name() == cgroups.Memory || sub.Name() == cgroups.Cpuacct {
 			out = append(out, sub)
@@ -39,6 +41,7 @@ func reportControllers() ([]cgroups.Subsystem, error) {
 	return out, nil
 }
 
+// Query gets a process metrics from control cgroup
 func (s *CGroupsSampler) Query() (*ProcMetrics, error) {
 	metrics, err := s.control.Stat(cgroups.IgnoreNotExist)
 	if err != nil {

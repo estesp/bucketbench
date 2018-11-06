@@ -15,7 +15,7 @@ const (
 
 // OverheadBench runs CustomBench benchmarks and measure memory and cpu usage of a container daemon
 type OverheadBench struct {
-	CustomBench
+	*CustomBench
 	cgroupPath string
 }
 

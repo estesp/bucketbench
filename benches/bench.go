@@ -132,7 +132,7 @@ func New(benchType Type, config *DriverConfig) (Bench, error) {
 			return &custom, nil
 		}
 
-		return &OverheadBench{CustomBench: custom, cgroupPath: config.CGroupPath}, nil
+		return &OverheadBench{CustomBench: &custom, cgroupPath: config.CGroupPath}, nil
 	default:
 		return nil, fmt.Errorf("no such benchmark type: %v", benchType)
 	}

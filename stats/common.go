@@ -30,7 +30,7 @@ type Sampler interface {
 func NewSampler(proc Process, cgroupPath string) (Sampler, error) {
 	if runtime.GOOS == "linux" && cgroupPath != "" {
 		return NewCGroupsSampler(cgroupPath)
-	} else {
-		return NewPSUtilSampler(proc)
 	}
+
+	return NewPSUtilSampler(proc)
 }
