@@ -3,6 +3,8 @@ package benches
 import (
 	"context"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"strings"
 	"sync"
 	"time"
@@ -14,12 +16,11 @@ import (
 // CustomBench benchmark runs a series of container lifecycle operations as
 // defined in the provided YAML against specified image and driver types
 type CustomBench struct {
+	driver.Config
 	benchName   string
 	driver      driver.Driver
 	imageInfo   string
 	cmdOverride string
-	logDriver   string
-	logOpts     map[string]string
 	trace       bool
 	stats       []RunStatistics
 	elapsed     time.Duration
@@ -29,22 +30,29 @@ type CustomBench struct {
 
 // Init initializes the benchmark
 func (cb *CustomBench) Init(ctx context.Context, name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error {
-	driver, err := driver.New(ctx, driverType, binaryPath, cb.logDriver, cb.logOpts)
+	cb.DriverType = driverType
+	cb.Path = binaryPath
+
+	driver, err := driver.New(ctx, &cb.Config)
 	if err != nil {
 		return fmt.Errorf("error during driver initialization for CustomBench: %v", err)
 	}
+
 	// get driver info; will also validate for daemon-based variants whether system is ready/up
 	// and running for benchmarking
 	info, err := driver.Info(ctx)
 	if err != nil {
 		return fmt.Errorf("error during driver info query: %v", err)
 	}
+
 	log.Infof("driver initialized: %s", info)
+
 	// prepare environment
 	err = driver.Clean(ctx)
 	if err != nil {
 		return fmt.Errorf("error during driver init cleanup: %v", err)
 	}
+
 	cb.benchName = name
 	cb.imageInfo = imageInfo
 	cb.cmdOverride = cmdOverride
@@ -93,7 +101,7 @@ func (cb *CustomBench) Run(ctx context.Context, threads, iterations int, command
 	for i := 0; i < threads; i++ {
 		// create a driver instance for each thread to protect from drivers
 		// which may not be threadsafe (e.g. gRPC client connection in containerd?)
-		drv, err := driver.New(ctx, cb.driver.Type(), cb.driver.Path(), cb.logDriver, cb.logOpts)
+		drv, err := driver.New(ctx, &cb.Config)
 		if err != nil {
 			return fmt.Errorf("error creating new driver for thread %d: %v", i, err)
 		}
@@ -129,6 +137,9 @@ func (cb *CustomBench) runThread(ctx context.Context, runner driver.Driver, thre
 		if err != nil {
 			log.Errorf("Error on creating container %q from image %q: %v", name, cb.imageInfo, err)
 		}
+
+		// Stats calls must be stopped at the end of current iteration if streaming
+		statsCtx, statsCancel := context.WithCancel(ctx)
 
 		for _, cmd := range commands {
 			log.Debugf("running command: %s", cmd)
@@ -182,16 +193,25 @@ func (cb *CustomBench) runThread(ctx context.Context, runner driver.Driver, thre
 				durations["wait"] = waitElapsed
 				log.Debug(out)
 			case "metrics", "stats":
-				out, err := runner.Metrics(ctx, ctr)
-				if err != nil {
+				if reader, err := runner.Stats(statsCtx, ctr); err != nil {
 					errors["metrics"]++
-					log.Warnf("Error during container command %q on %q: %v\n  Output: %s", cmd, name, err, out)
+					log.Warnf("Error during container command %q on %q: %v", cmd, name, err)
+				} else {
+					go func() {
+						// We want to measure the overhead of collecting stats, we're not interested in stats data itself,
+						// so just discard the stream output
+						io.Copy(ioutil.Discard, reader)
+						reader.Close()
+					}()
 				}
-				log.Debug(out)
+
 			default:
 				log.Errorf("Command %q unrecognized from YAML commands list; skipping", cmd)
 			}
 		}
+
+		statsCancel()
+
 		stats <- RunStatistics{
 			Durations: durations,
 			Errors:    errors,
@@ -229,7 +249,6 @@ func (cb *CustomBench) Type() Type {
 }
 
 // Info returns a string with the driver type and custom benchmark name
-func (cb *CustomBench) Info() string {
-	driverType := driver.TypeToString(cb.driver.Type())
-	return cb.benchName + ":" + driverType
+func (cb *CustomBench) Info(ctx context.Context) (string, error) {
+	return cb.driver.Info(ctx)
 }

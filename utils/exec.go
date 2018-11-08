@@ -4,6 +4,7 @@ package utils
 
 import (
 	"context"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -61,4 +62,23 @@ func ExecShellCmd(ctx context.Context, cmd string) (string, error) {
 	execCmd := exec.CommandContext(ctx, "bash", "-c", cmd)
 	out, err := execCmd.CombinedOutput()
 	return string(out), errors.Wrapf(err, "exec failed: %s", cmd)
+}
+
+// ExecCmdStream executes a command and returns a Reader, which is useful for streaming
+func ExecCmdStream(ctx context.Context, cmd, args string) (io.ReadCloser, error) {
+	reader, writer := io.Pipe()
+
+	execCmd := exec.CommandContext(ctx, cmd, strings.Split(args, " ")...)
+	execCmd.Stdout = writer
+
+	if err := execCmd.Start(); err != nil {
+		return nil, err
+	}
+
+	go func() {
+		err := execCmd.Wait()
+		writer.CloseWithError(err)
+	}()
+
+	return reader, nil
 }

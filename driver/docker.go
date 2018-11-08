@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -18,16 +19,19 @@ import (
 const (
 	dockerContainerStopTimeout = 30 * time.Second
 	dockerDefaultPIDPath       = "/var/run/docker.pid"
+	// dockerStreamingCopySize is an approximate response size of stat call via Docker API
+	dockerStreamingCopySize = 2048
 )
 
 // DockerDriver is an implementation of the driver interface for the Docker engine using API
 type DockerDriver struct {
-	client    *docker.Client
-	logConfig *container.LogConfig
+	client      *docker.Client
+	logConfig   *container.LogConfig
+	streamStats bool
 }
 
 // NewDockerDriver creates an instance of Docker API driver.
-func NewDockerDriver(ctx context.Context, logDriver string, logOpts map[string]string) (*DockerDriver, error) {
+func NewDockerDriver(ctx context.Context, config *Config) (*DockerDriver, error) {
 	client, err := docker.NewClientWithOpts()
 	if err != nil {
 		return nil, err
@@ -42,13 +46,14 @@ func NewDockerDriver(ctx context.Context, logDriver string, logOpts map[string]s
 	client.NegotiateAPIVersionPing(ping)
 
 	driver := &DockerDriver{
-		client: client,
+		client:      client,
+		streamStats: config.StreamStats,
 	}
 
-	if logDriver != "" {
+	if config.LogDriver != "" {
 		driver.logConfig = &container.LogConfig{
-			Type:   logDriver,
-			Config: logOpts,
+			Type:   config.LogDriver,
+			Config: config.LogOpts,
 		}
 	}
 
@@ -67,7 +72,7 @@ func (d *DockerDriver) Info(ctx context.Context) (string, error) {
 		return "", errors.Wrap(err, "failed to query Docker info")
 	}
 
-	return fmt.Sprintf("Docker API (name: '%s', driver: '%s', version: '%s')", info.Name, info.Driver, info.ServerVersion), nil
+	return fmt.Sprintf("Docker API (version: '%s')", info.ServerVersion), nil
 }
 
 // Path returns the binary (or socket) path related to the runtime in use
@@ -75,9 +80,29 @@ func (d *DockerDriver) Path() string {
 	return ""
 }
 
-// Create will create a container instance matching the specific needs
-// of a driver
+// Create will pull and create a container instance matching the specific needs of a driver
 func (d *DockerDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+	// Make sure the Docker image is available locally
+	images, err := d.client.ImageList(ctx, types.ImageListOptions{
+		Filters: filters.NewArgs(filters.Arg("reference", image)),
+	})
+
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to query image list")
+	}
+
+	if len(images) == 0 {
+		reader, err := d.client.ImagePull(ctx, image, types.ImagePullOptions{})
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to pull image: '%s'", image)
+		}
+
+		defer reader.Close()
+
+		// We don't want image content here, just make Docker pulling the image till end
+		io.Copy(ioutil.Discard, reader)
+	}
+
 	return newDockerContainer(name, image, cmdOverride, detached, trace), nil
 }
 
@@ -210,21 +235,36 @@ func (d *DockerDriver) ProcNames() []string {
 	return dockerProcNames
 }
 
-// Metrics returns stats data from daemon for container
-func (d *DockerDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
-	stats, err := d.client.ContainerStats(ctx, ctr.Name(), false)
+// Stats returns stats data from daemon for container
+func (d *DockerDriver) Stats(ctx context.Context, ctr Container) (io.ReadCloser, error) {
+	stats, err := d.client.ContainerStats(ctx, ctr.Name(), d.streamStats)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get stats for container: '%s'", ctr.Name())
 	}
 
-	defer stats.Body.Close()
+	reader, writer := io.Pipe()
 
-	data, err := ioutil.ReadAll(stats.Body)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to read stats for container: '%s'", ctr.Name())
-	}
+	go func() {
+		defer stats.Body.Close()
 
-	return data, nil
+		buf := make([]byte, dockerStreamingCopySize)
+
+		for {
+			select {
+			case <-ctx.Done():
+				writer.CloseWithError(ctx.Err())
+				return
+			default:
+				limitReader := io.LimitReader(stats.Body, dockerStreamingCopySize)
+				if written, err := io.CopyBuffer(writer, limitReader, buf); err != nil || written == 0 {
+					writer.CloseWithError(err)
+					return
+				}
+			}
+		}
+	}()
+
+	return reader, nil
 }
 
 func getDockerPID(path string) (int, error) {

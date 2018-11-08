@@ -28,6 +28,7 @@ import (
 	"github.com/estesp/bucketbench/driver"
 	"github.com/go-yaml/yaml"
 	"github.com/montanaflynn/stats"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -49,6 +50,7 @@ var (
 // after all benchmarks are complete
 type benchResult struct {
 	name        string
+	driverInfo  string
 	threads     int
 	iterations  int
 	threadRates []float64
@@ -135,7 +137,7 @@ func runLimitTest(ctx context.Context) []float64 {
 	var rates []float64
 	// get thread limit stats
 	for i := 1; i <= defaultLimitThreads; i++ {
-		limit, _ := benches.New(benches.Limit, "", nil)
+		limit, _ := benches.New(benches.Limit, &benches.DriverConfig{})
 		limit.Init(ctx, "", driver.Null, "", "", "", trace)
 		limit.Run(ctx, i, defaultLimitIter, nil)
 		duration := limit.Elapsed()
@@ -148,49 +150,72 @@ func runLimitTest(ctx context.Context) []float64 {
 
 func runBenchmark(ctx context.Context, benchType benches.Type, driverConfig benches.DriverConfig, benchmark benches.Benchmark) (benchResult, error) {
 	var (
-		rates     []float64
-		stats     [][]benches.RunStatistics
-		benchInfo string
+		rates      []float64
+		stats      [][]benches.RunStatistics
+		benchInfo  string
+		driverInfo string
 	)
 	driverType := driver.StringToType(driverConfig.Type)
 	stats = make([][]benches.RunStatistics, driverConfig.Threads)
 
 	for i := 1; i <= driverConfig.Threads; i++ {
-		bench, _ := benches.New(benchType, driverConfig.LogDriver, driverConfig.LogOpts)
+		bench, err := benches.New(benchType, &driverConfig)
+		if err != nil {
+			return benchResult{}, err
+		}
+
 		imageInfo := benchmark.Image
 		if driverType == driver.Runc || driverType == driver.Ctr {
 			// legacy ctr mode and runc drivers need an exploded rootfs
 			// first, verify thta a rootfs was provided in the benchmark YAML
 			if benchmark.RootFs == "" {
-				return benchResult{}, fmt.Errorf("No rootfs defined in the benchmark YAML; driver %s requires a root FS path", driverConfig.Type)
+				return benchResult{}, fmt.Errorf("no rootfs defined in the benchmark YAML; driver %s requires a root FS path", driverConfig.Type)
 			}
+
 			imageInfo = benchmark.RootFs
 		}
-		err := bench.Init(ctx, benchmark.Name, driverType, driverConfig.ClientPath, imageInfo, benchmark.Command, trace)
+
+		err = bench.Init(ctx, benchmark.Name, driverType, driverConfig.ClientPath, imageInfo, benchmark.Command, trace)
 		if err != nil {
 			return benchResult{}, err
 		}
-		benchInfo = bench.Info()
+
+		benchInfo = fmt.Sprintf("%s:%s", benchType, driverConfig.Type)
+
 		if err = bench.Validate(ctx); err != nil {
-			return benchResult{}, fmt.Errorf("Error during bench validate: %v", err)
+			return benchResult{}, fmt.Errorf("error during bench validate: %v", err)
 		}
+
+		if driverInfo == "" {
+			info, err := bench.Info(ctx)
+			if err != nil {
+				return benchResult{}, errors.Wrap(err, "failed to query driver info")
+			}
+
+			driverInfo = info
+		}
+
 		err = bench.Run(ctx, i, driverConfig.Iterations, benchmark.Commands)
 		if err != nil {
-			return benchResult{}, fmt.Errorf("Error during bench run: %v", err)
+			return benchResult{}, fmt.Errorf("error during bench run: %v", err)
 		}
+
 		duration := bench.Elapsed()
 		rate := float64(i*driverConfig.Iterations) / duration.Seconds()
 		rates = append(rates, rate)
 		stats[i-1] = bench.Stats()
 		log.Infof("%s: threads %d, iterations %d, rate: %6.2f", benchInfo, i, driverConfig.Iterations, rate)
 	}
+
 	result := benchResult{
 		name:        benchInfo,
+		driverInfo:  driverInfo,
 		threads:     driverConfig.Threads,
 		iterations:  driverConfig.Iterations,
 		threadRates: rates,
 		statistics:  stats,
 	}
+
 	return result, nil
 }
 
@@ -252,9 +277,7 @@ func outputRunDetails(maxThreads int, results []benchResult, overhead bool) {
 
 	if overhead {
 		fmt.Fprintf(w, "\n")
-		fmt.Fprintf(w, "OVERHEAD\n\n")
-
-		fmt.Fprintf(w, "Bench / driver / threads\tMin\tMax\tAvg\tMin\tMax\tAvg\tMem %%\tCPU x\t\n")
+		fmt.Fprintf(w, "OVERHEAD\n")
 
 		var overheadResults []benchResult
 		for _, res := range results {
@@ -279,6 +302,11 @@ func outputRunDetails(maxThreads int, results []benchResult, overhead bool) {
 		}
 
 		for i, res := range overheadResults {
+
+			fmt.Fprintf(w, "\n%s\n\n", res.driverInfo)
+
+			fmt.Fprintf(w, "Bench / driver / threads\tMin\tMax\tAvg\tMin\tMax\tAvg\tMem %%\tCPU x\t\n")
+
 			for j := 0; j < res.threads; j++ {
 				m := metrics[i][j]
 
@@ -296,7 +324,7 @@ func outputRunDetails(maxThreads int, results []benchResult, overhead bool) {
 						mem := 100*getDelta(float64(metrics[0][j].avgMem), float64(m.avgMem)) - 100
 						cpu := getDelta(metrics[0][j].avgCPU, m.avgCPU)
 
-						fmt.Fprintf(w, "%+.2f%%\t%+.2fx\t", mem, cpu)
+						fmt.Fprintf(w, "%+.2f%%\t%.2fx\t", mem, cpu)
 					}
 				}
 

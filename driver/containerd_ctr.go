@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -125,8 +126,8 @@ func (r *CtrDriver) Wait(ctx context.Context, ctr Container) (string, time.Durat
 	return "", 0, errors.New("not implemented")
 }
 
-// Metrics returns stats data from daemon for container
-func (r *CtrDriver) Metrics(ctx context.Context, ctr Container) (interface{}, error) {
+// Stats returns stats data from daemon for container
+func (r *CtrDriver) Stats(ctx context.Context, ctr Container) (io.ReadCloser, error) {
 	return nil, errors.New("not implemented")
 }
 
