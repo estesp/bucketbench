@@ -327,7 +327,7 @@ func (r *ContainerdDriver) Run(ctx context.Context, ctr Container) (string, time
 	}
 
 	stdouterr := bytes.NewBuffer(nil)
-	task, err := container.NewTask(ctx, cio.NewIO(bytes.NewBuffer(nil), stdouterr, stdouterr))
+	task, err := container.NewTask(ctx, cio.NewCreator(cio.WithStreams(bytes.NewBuffer(nil), stdouterr, stdouterr)))
 	if err != nil {
 		return "", 0, err
 	}

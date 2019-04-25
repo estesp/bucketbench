@@ -1,7 +1,8 @@
-package client // import "github.com/docker/docker/client"
+package client
 
 import (
 	"fmt"
+
 	"net/http"
 
 	"github.com/docker/docker/api/types/versions"
