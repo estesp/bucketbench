@@ -1,7 +1,6 @@
-package client // import "github.com/docker/docker/client"
+package client
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/registry"
+	"golang.org/x/net/context"
 )
 
 // ImageSearch makes the docker host to search by a term in a remote registry.

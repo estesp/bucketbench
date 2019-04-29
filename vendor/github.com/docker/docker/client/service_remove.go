@@ -1,6 +1,6 @@
-package client // import "github.com/docker/docker/client"
+package client
 
-import "context"
+import "golang.org/x/net/context"
 
 // ServiceRemove kills and removes a service.
 func (cli *Client) ServiceRemove(ctx context.Context, serviceID string) error {
