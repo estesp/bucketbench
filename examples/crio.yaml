@@ -6,7 +6,7 @@ drivers:
    type: CRI
    threads: 5
    iterations: 1
-   clientpath: /var/run/crio.sock
+   clientpath: /var/run/crio/crio.sock
 commands:
   - run
   - stop
