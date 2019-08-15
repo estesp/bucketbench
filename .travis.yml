@@ -4,8 +4,11 @@
   go:
     - 1.12.x
   install:
-    - go get github.com/golang/lint/golint
+    - go get golang.org/x/lint/golint
   script:
+    - export GO111MODULE=on
+    - export GOFLAGS=-mod=vendor
+    - go mod verify | grep "all modules verified"
     - make binary
     - go vet $(go list ./... | grep -v vendor)
     - test -z "$(golint ./... | grep -v vendor | tee /dev/stderr)"
