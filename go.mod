@@ -14,7 +14,6 @@ require (
 	github.com/docker/go-connections v0.4.0
 	github.com/docker/go-events v0.0.0-20170721190031-9461782956ad
 	github.com/docker/go-units v0.4.0
-	gopkg.in/yaml.v2 v0.0.0-20190319135612-7b8349ac747c
 	github.com/godbus/dbus v0.0.0-20151105175453-c7fdd8b5cd55
 	github.com/gogo/googleapis v1.0.0
 	github.com/gogo/protobuf v1.0.0
@@ -36,5 +35,6 @@ require (
 	golang.org/x/text v0.0.0-20170512150324-19e51611da83
 	google.golang.org/genproto v0.0.0-20170523043604-d80a6e20e776
 	google.golang.org/grpc v1.12.0
+	gopkg.in/yaml.v2 v2.0.0-20190319135612-7b8349ac747c
 	k8s.io/kubernetes v1.14.1
 )
