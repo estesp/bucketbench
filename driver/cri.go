@@ -314,7 +314,7 @@ func (c *CRIDriver) Stats(ctx context.Context, ctr Container) (io.ReadCloser, er
 
 // ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
 func (c *CRIDriver) ProcNames() []string {
-	return []string{}
+	return containerdProcNames
 }
 
 func openFile(path string) (*os.File, error) {
