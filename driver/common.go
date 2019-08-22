@@ -118,6 +118,7 @@ type Config struct {
 	LogOpts       map[string]string
 	StreamStats   bool
 	StatsInterval time.Duration
+	ProcNames     []string
 }
 
 // New creates a driver instance of a specific type
@@ -134,7 +135,7 @@ func New(ctx context.Context, config *Config) (Driver, error) {
 	case Ctr:
 		return NewCtrDriver(config.Path)
 	case CRI:
-		return NewCRIDriver(config.Path)
+		return NewCRIDriver(config)
 	case Null:
 		return nil, nil
 	default:

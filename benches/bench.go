@@ -49,6 +49,7 @@ type DriverConfig struct {
 	CGroupPath       string            `yaml:"cgroupPath"`
 	StreamStats      bool              `yaml:"streamStats"`
 	StatsIntervalSec int               `yaml:"statsIntervalSec"`
+	ProcNames        []string          `yaml:"procNames"`
 }
 
 // State constants

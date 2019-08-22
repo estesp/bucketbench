@@ -35,6 +35,7 @@ type CRIDriver struct {
 	imageClient      *pb.ImageServiceClient
 	pconfig          pb.PodSandboxConfig
 	cconfig          pb.ContainerConfig
+	procNames        []string
 }
 
 // CRIContainer is an implementation of the container metadata needed for CRI implementation
@@ -49,12 +50,12 @@ type CRIContainer struct {
 }
 
 // NewCRIDriver creates an instance of the CRI driver
-func NewCRIDriver(path string) (Driver, error) {
-	if path == "" {
+func NewCRIDriver(config *Config) (Driver, error) {
+	if config.Path == "" {
 		return nil, fmt.Errorf("socket path unspecified")
 	}
 
-	conn, err := getGRPCConn(path, time.Duration(10*time.Second))
+	conn, err := getGRPCConn(config.Path, time.Duration(10*time.Second))
 	if err != nil {
 		return nil, err
 	}
@@ -73,11 +74,12 @@ func NewCRIDriver(path string) (Driver, error) {
 	}
 
 	driver := &CRIDriver{
-		criSocketAddress: path,
+		criSocketAddress: config.Path,
 		runtimeClient:    &runtimeClient,
 		imageClient:      &imageClient,
 		cconfig:          cconfig,
 		pconfig:          pconfig,
+		procNames:        config.ProcNames,
 	}
 
 	return driver, nil
@@ -314,7 +316,7 @@ func (c *CRIDriver) Stats(ctx context.Context, ctr Container) (io.ReadCloser, er
 
 // ProcNames returns the list of process names contributing to mem/cpu usage during overhead benchmark
 func (c *CRIDriver) ProcNames() []string {
-	return containerdProcNames
+	return c.procNames
 }
 
 func openFile(path string) (*os.File, error) {
