@@ -25,7 +25,6 @@ type CustomBench struct {
 	stats       []RunStatistics
 	elapsed     time.Duration
 	state       State
-	wg          sync.WaitGroup
 }
 
 // Init initializes the benchmark
@@ -98,6 +97,8 @@ func (cb *CustomBench) Run(ctx context.Context, threads, iterations int, command
 	}
 	cb.state = Running
 	start := time.Now()
+
+	var wg sync.WaitGroup
 	for i := 0; i < threads; i++ {
 		// create a driver instance for each thread to protect from drivers
 		// which may not be threadsafe (e.g. gRPC client connection in containerd?)
@@ -105,10 +106,14 @@ func (cb *CustomBench) Run(ctx context.Context, threads, iterations int, command
 		if err != nil {
 			return fmt.Errorf("error creating new driver for thread %d: %v", i, err)
 		}
-		cb.wg.Add(1)
-		go cb.runThread(ctx, drv, i, iterations, commands, statChan[i])
+
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			cb.runThread(ctx, drv, index, iterations, commands, statChan[index])
+		}(i)
 	}
-	cb.wg.Wait()
+	wg.Wait()
 	cb.elapsed = time.Since(start)
 
 	log.Infof("CustomBench threads complete in %v time elapsed", cb.elapsed)
@@ -127,6 +132,13 @@ func (cb *CustomBench) Run(ctx context.Context, threads, iterations int, command
 }
 
 func (cb *CustomBench) runThread(ctx context.Context, runner driver.Driver, threadNum, iterations int, commands []string, stats chan RunStatistics) {
+	defer func() {
+		if err := runner.Close(); err != nil {
+			log.Errorf("error on closing driver: %v", err)
+		}
+		close(stats)
+	}()
+
 	for i := 0; i < iterations; i++ {
 		errors := make(map[string]int)
 		durations := make(map[string]time.Duration)
@@ -136,6 +148,7 @@ func (cb *CustomBench) runThread(ctx context.Context, runner driver.Driver, thre
 		ctr, err := runner.Create(ctx, name, cb.imageInfo, cb.cmdOverride, true, cb.trace)
 		if err != nil {
 			log.Errorf("Error on creating container %q from image %q: %v", name, cb.imageInfo, err)
+			return
 		}
 
 		// Stats calls must be stopped at the end of current iteration if streaming
@@ -218,11 +231,6 @@ func (cb *CustomBench) runThread(ctx context.Context, runner driver.Driver, thre
 			Timestamp: time.Now().UTC(),
 		}
 	}
-	if err := runner.Close(); err != nil {
-		log.Errorf("error on closing driver: %v", err)
-	}
-	close(stats)
-	cb.wg.Done()
 }
 
 // Stats returns the statistics of the benchmark run
