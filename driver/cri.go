@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	defaultPodImage        = "gcr.io/google_containers/pause:3.0"
+	defaultPodImage        = "k8s.gcr.io/pause:3.1"
 	defaultPodNamePrefix   = "pod"
 	defaultSandboxConfig   = "contrib/sandbox_config.json"
 	defaultContainerConfig = "contrib/container_config.json"

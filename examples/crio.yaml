@@ -1,5 +1,5 @@
 name: CRICrio
-image: alpine
+image: docker.io/library/alpine:latest
 detached: true
 drivers:
   - 
