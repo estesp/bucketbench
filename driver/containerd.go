@@ -314,13 +314,13 @@ func (r *ContainerdDriver) Run(ctx context.Context, ctr Container) (string, time
 	if ctr.Command() != "" {
 		// the command needs to be overridden in the generated spec
 		container, err = r.client.NewContainer(ctx, ctr.Name(),
+			containerd.WithNewSnapshot(ctr.Name(), image),
 			containerd.WithNewSpec(oci.WithImageConfig(image),
-				oci.WithProcessArgs(strings.Split(ctr.Command(), " ")...)),
-			containerd.WithNewSnapshot(ctr.Name(), image))
+				oci.WithProcessArgs(strings.Split(ctr.Command(), " ")...)))
 	} else {
 		container, err = r.client.NewContainer(ctx, ctr.Name(),
-			containerd.WithNewSpec(oci.WithImageConfig(image)),
-			containerd.WithNewSnapshot(ctr.Name(), image))
+			containerd.WithNewSnapshot(ctr.Name(), image),
+			containerd.WithNewSpec(oci.WithImageConfig(image)))
 	}
 	if err != nil {
 		return "", 0, err
