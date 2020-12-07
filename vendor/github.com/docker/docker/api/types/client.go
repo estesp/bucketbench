@@ -50,7 +50,7 @@ type ContainerCommitOptions struct {
 
 // ContainerExecInspect holds information returned by exec inspect.
 type ContainerExecInspect struct {
-	ExecID      string `json:"ID"`
+	ExecID      string
 	ContainerID string
 	Running     bool
 	ExitCode    int
