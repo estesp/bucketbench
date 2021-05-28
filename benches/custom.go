@@ -37,6 +37,10 @@ func (cb *CustomBench) Init(ctx context.Context, name string, driverType driver.
 		return fmt.Errorf("error during driver initialization for CustomBench: %v", err)
 	}
 
+	if driver == nil {
+		return fmt.Errorf("driver initialization failed for type %v", driverType.String())
+	}
+
 	// get driver info; will also validate for daemon-based variants whether system is ready/up
 	// and running for benchmarking
 	info, err := driver.Info(ctx)
