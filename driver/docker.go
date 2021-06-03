@@ -32,7 +32,7 @@ type DockerDriver struct {
 
 // NewDockerDriver creates an instance of Docker API driver.
 func NewDockerDriver(ctx context.Context, config *Config) (*DockerDriver, error) {
-	client, err := docker.NewEnvClient()
+	client, err := docker.NewClientWithOpts(docker.FromEnv, docker.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, err
 	}

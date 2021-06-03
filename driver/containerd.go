@@ -15,6 +15,7 @@ import (
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/estesp/bucketbench/utils"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -472,6 +473,9 @@ func stopTask(ctx context.Context, ctr containerd.Container) error {
 		return nil
 	}
 	status, err := task.Status(ctx)
+	if err != nil {
+		return errors.Wrapf(err, "unable to query task status for %s", task.ID())
+	}
 	switch status.Status {
 	case containerd.Stopped:
 		_, err := task.Delete(ctx)
