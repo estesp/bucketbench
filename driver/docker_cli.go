@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/estesp/bucketbench/utils"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -147,9 +148,12 @@ func (d *DockerCLIDriver) Info(ctx context.Context) (string, error) {
 
 	infoStart := "docker driver (binary: " + d.dockerBinary + ")\n"
 	version, err := utils.ExecCmd(ctx, d.dockerBinary, "version")
+	if err != nil {
+		return "", errors.Wrap(err, "failed to retrieve docker daemon version")
+	}
 	info, err := utils.ExecCmd(ctx, d.dockerBinary, "info")
 	if err != nil {
-		return "", fmt.Errorf("error trying to retrieve docker daemon info: %v", err)
+		return "", errors.Wrap(err, "failed to retrieve docker daemon info")
 	}
 
 	d.dockerInfo = infoStart + parseDaemonInfo(version, info)

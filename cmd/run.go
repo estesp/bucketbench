@@ -21,6 +21,7 @@ import (
 	"math"
 	"os"
 	"os/signal"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -68,7 +69,7 @@ iterations and number of concurrent threads. Results will be displayed afterward
 		defer cancel()
 
 		stopC := make(chan os.Signal, 1)
-		signal.Notify(stopC, os.Interrupt, os.Kill)
+		signal.Notify(stopC, os.Interrupt, syscall.SIGTERM)
 
 		go func() {
 			select {
@@ -167,7 +168,7 @@ func runBenchmark(ctx context.Context, benchType benches.Type, driverConfig benc
 		imageInfo := benchmark.Image
 		if driverType == driver.Runc || driverType == driver.Ctr {
 			// legacy ctr mode and runc drivers need an exploded rootfs
-			// first, verify thta a rootfs was provided in the benchmark YAML
+			// first, verify that a rootfs was provided in the benchmark YAML
 			if benchmark.RootFs == "" {
 				return benchResult{}, fmt.Errorf("no rootfs defined in the benchmark YAML; driver %s requires a root FS path", driverConfig.Type)
 			}

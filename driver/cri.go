@@ -42,8 +42,8 @@ type CRIContainer struct {
 	name        string
 	imageName   string
 	cmdOverride string
-	state       string
-	process     string
+	state       string //nolint:structcheck,unused
+	process     string //nolint:structcheck,unused
 	trace       bool
 	podID       string
 }
@@ -54,7 +54,7 @@ func NewCRIDriver(path string) (Driver, error) {
 		return nil, fmt.Errorf("socket path unspecified")
 	}
 
-	conn, err := getGRPCConn(path, time.Duration(10*time.Second))
+	conn, err := getGRPCConn(path, 10*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -84,9 +84,14 @@ func NewCRIDriver(path string) (Driver, error) {
 }
 
 func getGRPCConn(socket string, timeout time.Duration) (*grpc.ClientConn, error) {
-	conn, err := grpc.Dial(socket, grpc.WithInsecure(), grpc.WithTimeout(timeout),
-		grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-			return net.DialTimeout("unix", addr, timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	conn, err := grpc.DialContext(ctx, socket, grpc.WithInsecure(),
+		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+			var d net.Dialer
+			d.LocalAddr = nil
+			raddr := net.UnixAddr{Name: addr, Net: "unix"}
+			return d.DialContext(ctx, "unix", raddr.String())
 		}))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect: %v", err)
