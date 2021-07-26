@@ -5,7 +5,7 @@ go 1.15
 require (
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/containerd/cgroups v1.0.1
-	github.com/containerd/containerd v1.5.1
+	github.com/containerd/containerd v1.5.4
 	github.com/docker/docker v1.4.2-0.20200203170920-46ec8731fbce
 	github.com/docker/go-connections v0.4.1-0.20190612165340-fd1b1942c4d5 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
