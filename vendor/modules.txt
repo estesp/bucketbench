@@ -4,7 +4,7 @@ github.com/Microsoft/go-winio/backuptar
 github.com/Microsoft/go-winio/pkg/guid
 github.com/Microsoft/go-winio/pkg/security
 github.com/Microsoft/go-winio/vhd
-# github.com/Microsoft/hcsshim v0.8.18
+# github.com/Microsoft/hcsshim v0.8.21
 github.com/Microsoft/hcsshim
 github.com/Microsoft/hcsshim/computestorage
 github.com/Microsoft/hcsshim/internal/cow
@@ -29,11 +29,13 @@ github.com/Microsoft/hcsshim/pkg/ociwclayer
 # github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d
 ## explicit
 github.com/StackExchange/wmi
+# github.com/bits-and-blooms/bitset v1.2.0
+github.com/bits-and-blooms/bitset
 # github.com/containerd/cgroups v1.0.1
 ## explicit
 github.com/containerd/cgroups
 github.com/containerd/cgroups/stats/v1
-# github.com/containerd/containerd v1.5.4
+# github.com/containerd/containerd v1.5.7
 ## explicit
 github.com/containerd/containerd
 github.com/containerd/containerd/api/services/containers/v1
@@ -101,7 +103,7 @@ github.com/containerd/fifo
 github.com/containerd/ttrpc
 # github.com/containerd/typeurl v1.0.2
 github.com/containerd/typeurl
-# github.com/coreos/go-systemd/v22 v22.1.0
+# github.com/coreos/go-systemd/v22 v22.3.2
 github.com/coreos/go-systemd/v22/dbus
 # github.com/docker/distribution v2.7.1+incompatible
 github.com/docker/distribution/digestset
@@ -143,7 +145,7 @@ github.com/go-ole/go-ole/oleutil
 # github.com/go-yaml/yaml v2.1.0+incompatible
 ## explicit
 github.com/go-yaml/yaml
-# github.com/godbus/dbus/v5 v5.0.3
+# github.com/godbus/dbus/v5 v5.0.4
 github.com/godbus/dbus/v5
 # github.com/gogo/googleapis v1.4.0 => github.com/gogo/googleapis v1.3.2
 github.com/gogo/googleapis/google/rpc
@@ -155,7 +157,7 @@ github.com/gogo/protobuf/sortkeys
 github.com/gogo/protobuf/types
 # github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e
 github.com/golang/groupcache/lru
-# github.com/golang/protobuf v1.4.3 => github.com/golang/protobuf v1.3.5
+# github.com/golang/protobuf v1.5.0 => github.com/golang/protobuf v1.3.5
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
@@ -188,11 +190,11 @@ github.com/opencontainers/go-digest
 github.com/opencontainers/image-spec/identity
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
-# github.com/opencontainers/runc v1.0.0-rc93
+# github.com/opencontainers/runc v1.0.2
 github.com/opencontainers/runc/libcontainer/user
-# github.com/opencontainers/runtime-spec v1.0.3-0.20200929063507-e6143ca7d51d
+# github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417
 github.com/opencontainers/runtime-spec/specs-go
-# github.com/opencontainers/selinux v1.8.0
+# github.com/opencontainers/selinux v1.8.2
 github.com/opencontainers/selinux/go-selinux
 github.com/opencontainers/selinux/go-selinux/label
 github.com/opencontainers/selinux/pkg/pwalk
@@ -210,7 +212,7 @@ github.com/shirou/gopsutil/process
 # github.com/shirou/w32 v0.0.0-20160930032740-bb4de0191aa4
 ## explicit
 github.com/shirou/w32
-# github.com/sirupsen/logrus v1.7.0
+# github.com/sirupsen/logrus v1.8.1
 ## explicit
 github.com/sirupsen/logrus
 # github.com/spf13/cobra v1.0.0
@@ -218,8 +220,6 @@ github.com/sirupsen/logrus
 github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.5
 github.com/spf13/pflag
-# github.com/willf/bitset v1.1.11
-github.com/willf/bitset
 # go.opencensus.io v0.22.3
 go.opencensus.io
 go.opencensus.io/internal
@@ -237,7 +237,7 @@ golang.org/x/net/trace
 # golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.0.0-20210324051608-47abb6519492
+# golang.org/x/sys v0.0.0-20210426230700-d19ff857e887
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
 golang.org/x/sys/windows
