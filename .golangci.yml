@@ -6,17 +6,25 @@ linters:
     - unconvert
     - gofmt
     - goimports
-    - golint
+    - revive
     - ineffassign
     - vet
     - unused
     - misspell
+    - gosec
+    - exportloopref
+    - tenv
   disable:
     - errcheck
 
 issues:
   include:
     - EXC0002
+  exclude-rules:
+    # G204: subprocess launching should be audited
+    - text: "G204"
+      linters:
+        - gosec
 
 run:
   timeout: 2m
