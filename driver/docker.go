@@ -148,7 +148,7 @@ func (d *DockerDriver) Run(ctx context.Context, ctr Container) (string, time.Dur
 		hostConfig.LogConfig = *d.logConfig
 	}
 
-	if _, err := d.client.ContainerCreate(ctx, &config, &hostConfig, nil, ctr.Name()); err != nil {
+	if _, err := d.client.ContainerCreate(ctx, &config, &hostConfig, nil, nil, ctr.Name()); err != nil {
 		return "", 0, errors.Wrapf(err, "couldn't create container '%s'", ctr.Name())
 	}
 
