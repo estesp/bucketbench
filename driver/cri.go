@@ -86,7 +86,7 @@ func NewCRIDriver(path string) (Driver, error) {
 func getGRPCConn(socket string, timeout time.Duration) (*grpc.ClientConn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	conn, err := grpc.DialContext(ctx, socket, grpc.WithInsecure(),
+	conn, err := grpc.DialContext(ctx, socket, grpc.WithInsecure(), //nolint:staticcheck
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
 			var d net.Dialer
 			d.LocalAddr = nil
