@@ -82,7 +82,7 @@ for each engine to know **what** to run:
  - **name**: Give the benchmark a name. This will be used in output and logs.
  - **image**: Choose an image reference to be used by the image-based engine runtimes (containerd 1.0 and Docker). This can be any image reference accepted by the `docker pull` command. `bucketbench` will handle reconciling this reference to the format used by containerd 1.0 (e.g. `alpine` -> `docker.io/library/alpine:latest`)
  - **command**: *[Optional]* Specify an override for the image's default command that will be used for the image-based engine runtimes.
- - **rootfs**: For the `runc` and `ctr` (legacy containerd/0.2.x) drivers, you will need to provide an exploded rootfs and an OCI `config.json` since neither of those engines support image/registry interactions.
+ - **rootfs**: For the `runc`, `crun`, `youki` and `ctr` (legacy containerd/0.2.x) drivers, you will need to provide an exploded rootfs and an OCI `config.json` since neither of those engines support image/registry interactions.
  - **detached**: Run the containers in detached/background mode.
 
 The next two sections of the YAML provide 1) the configuration of which drivers
@@ -92,7 +92,7 @@ against each engine.
 #### Driver Configuration
 
 Each driver has the following settings:
- - **type**: One of the four implemented drivers: `Runc`, `Docker`, `Containerd`, `Ctr`
+ - **type**: One of the four implemented drivers: `Runc`, `Docker`, `Containerd`, `Ctr`, `Youki`, `CRun`
  - **clientpath**: *[Optional]* Path to the binary for client executable based drivers. In the case of containerd 1.0 and the CRI driver, this will be the unique UNIX socket path of the gRPC server. For client binary-based drivers, the driver will default to the standard binary name found in the current `$PATH`
  - **threads**: Integer number of concurrent threads to run. The `bucketbench` method is to execute 1..n runs, where `n` is the number of threads and each run adds another concurrent thread. **Run 1** only has one thread and **Run N** will have `n` concurrent threads.
  - **iterations**: Number of containers to create in each thread and execute the listed commands against.
@@ -151,7 +151,7 @@ More detailed information is collected during the runs and a future PR to
 `bucketbench` will provide the raw performance data in a consumable format for
 end users.
 
-To run `bucketbench` against `Runc`, `Containerd`, or the legacy `Ctr` driver
+To run `bucketbench` against `Runc`, `Containerd`, `CRun`, `Youki` or the legacy `Ctr` driver
 you must use `sudo` because of the requirements that those tools have for root
 access. This tool does not manage the two daemon-based engines (containerd and
 dockerd), and will fail if they are not up and running when the benchmark runs

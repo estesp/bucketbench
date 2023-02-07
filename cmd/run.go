@@ -166,8 +166,8 @@ func runBenchmark(ctx context.Context, benchType benches.Type, driverConfig benc
 		}
 
 		imageInfo := benchmark.Image
-		if driverType == driver.Runc || driverType == driver.Ctr {
-			// legacy ctr mode and runc drivers need an exploded rootfs
+		if driverType == driver.Runc || driverType == driver.Ctr || driverType == driver.CRun || driverType == driver.Youki {
+			// legacy ctr mode, runc, crun and youki drivers need an exploded rootfs
 			// first, verify that a rootfs was provided in the benchmark YAML
 			if benchmark.RootFs == "" {
 				return benchResult{}, fmt.Errorf("no rootfs defined in the benchmark YAML; driver %s requires a root FS path", driverConfig.Type)
