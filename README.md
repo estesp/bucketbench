@@ -39,6 +39,7 @@ Usage:
 Flags:
   -b, --benchmark string   YAML file with benchmark definition
   -h, --help               help for run
+  -l, --legacy             legacy mode will run benchmark from 1 to N(thread number) iterations.
   -o, --overhead           Output daemon overhead
   -s, --skip-limit         Skip 'limit' benchmark run
   -t, --trace              Enable per-container tracing during benchmark runs
@@ -94,7 +95,7 @@ against each engine.
 Each driver has the following settings:
  - **type**: One of the four implemented drivers: `Runc`, `Docker`, `Containerd`, `Ctr`, `Youki`, `CRun`
  - **clientpath**: *[Optional]* Path to the binary for client executable based drivers. In the case of containerd 1.0 and the CRI driver, this will be the unique UNIX socket path of the gRPC server. For client binary-based drivers, the driver will default to the standard binary name found in the current `$PATH`
- - **threads**: Integer number of concurrent threads to run. The `bucketbench` method is to execute 1..n runs, where `n` is the number of threads and each run adds another concurrent thread. **Run 1** only has one thread and **Run N** will have `n` concurrent threads.
+ - **threads**: Integer number of concurrent threads to run. If `--legacy` is set, the `bucketbench` method is to execute 1..n runs, where `n` is the number of threads and each run adds another concurrent thread. **Run 1** only has one thread and **Run N** will have `n` concurrent threads. If `--legacy` is not set, which is default mode, the `bucketbench` method is to execute just one run with the number of threads user specified. You will only see **Run N** which has `n` concurrent threads.
  - **iterations**: Number of containers to create in each thread and execute the listed commands against.
  - **logDriver**: `Docker` and `DockerCLI` support log driver configuration to measure overhead between different implementations. Allowed values can be found [here](https://docs.docker.com/config/containers/logging/configure/#supported-logging-drivers).
  - **logOpts**: Logger driver configuration, only used with `logDriver` option. See `overhead-logdriver.yaml` for examples.
