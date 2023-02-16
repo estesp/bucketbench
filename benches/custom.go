@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strings"
 	"sync"
 	"time"
@@ -217,7 +216,7 @@ func (cb *CustomBench) runThread(ctx context.Context, runner driver.Driver, thre
 					go func() {
 						// We want to measure the overhead of collecting stats, we're not interested in stats data itself,
 						// so just discard the stream output
-						io.Copy(ioutil.Discard, reader)
+						io.Copy(io.Discard, reader)
 						reader.Close()
 					}()
 				}

@@ -127,7 +127,7 @@ func (ctr *CRIContainer) Command() string {
 	return ctr.cmdOverride
 }
 
-//GetPodID return pod-id associated with container.
+// GetPodID return pod-id associated with container.
 func (ctr *CRIContainer) GetPodID() string {
 	return ctr.podID
 }

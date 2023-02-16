@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	dockerContainerStopTimeout = 30 * time.Second
+	dockerContainerStopTimeout = 30
 	dockerDefaultPIDPath       = "/var/run/docker.pid"
 	// dockerStreamingCopySize is an approximate response size of stat call via Docker API
 	dockerStreamingCopySize = 2048
@@ -100,7 +100,7 @@ func (d *DockerDriver) Create(ctx context.Context, name, image, cmdOverride stri
 		defer reader.Close()
 
 		// We don't want image content here, just make Docker pulling the image till end
-		io.Copy(ioutil.Discard, reader)
+		io.Copy(io.Discard, reader)
 	}
 
 	return newDockerContainer(name, image, cmdOverride, detached, trace), nil
@@ -165,7 +165,10 @@ func (d *DockerDriver) Stop(ctx context.Context, ctr Container) (string, time.Du
 	start := time.Now()
 
 	timeout := dockerContainerStopTimeout
-	if err := d.client.ContainerStop(ctx, ctr.Name(), &timeout); err != nil {
+	stop := container.StopOptions{
+		Timeout: &timeout,
+	}
+	if err := d.client.ContainerStop(ctx, ctr.Name(), stop); err != nil {
 		return "", 0, errors.Wrapf(err, "failed to stop container '%s'", ctr.Name())
 	}
 
@@ -272,7 +275,7 @@ func getDockerPID(path string) (int, error) {
 		path = dockerDefaultPIDPath
 	}
 
-	buf, err := ioutil.ReadFile(path)
+	buf, err := os.ReadFile(path)
 	if err != nil {
 		return 0, errors.Wrap(err, "could not read Docker pid file")
 	}
