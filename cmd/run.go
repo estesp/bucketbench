@@ -17,7 +17,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"os/signal"
@@ -498,7 +497,7 @@ func intMax(x, y int) int {
 
 func readYaml(filename string) (benches.Benchmark, error) {
 	var benchmarkYaml benches.Benchmark
-	yamlFile, err := ioutil.ReadFile(filename)
+	yamlFile, err := os.ReadFile(filename)
 	if err != nil {
 		return benchmarkYaml, fmt.Errorf("Can't read YAML file %q: %v", filename, err)
 	}

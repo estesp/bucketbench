@@ -95,8 +95,8 @@ func (c *RuncContainer) State() string {
 	return c.state
 }
 
-//GetPodID return pod-id associated with container.
-//only used by CRI-based drivers
+// GetPodID return pod-id associated with container.
+// only used by CRI-based drivers
 func (c *RuncContainer) GetPodID() string {
 	return ""
 }

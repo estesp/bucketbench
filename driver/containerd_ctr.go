@@ -94,8 +94,8 @@ func (c *CtrContainer) Detached() bool {
 	return true
 }
 
-//GetPodID return pod-id associated with container.
-//only used by CRI-based drivers
+// GetPodID return pod-id associated with container.
+// only used by CRI-based drivers
 func (c *CtrContainer) GetPodID() string {
 	return ""
 }

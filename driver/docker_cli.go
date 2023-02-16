@@ -108,8 +108,8 @@ func (c *DockerContainer) Command() string {
 	return c.cmdOverride
 }
 
-//GetPodID return pod-id associated with container.
-//only used by CRI-based drivers
+// GetPodID return pod-id associated with container.
+// only used by CRI-based drivers
 func (c *DockerContainer) GetPodID() string {
 	return ""
 }

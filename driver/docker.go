@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -100,7 +100,7 @@ func (d *DockerDriver) Create(ctx context.Context, name, image, cmdOverride stri
 		defer reader.Close()
 
 		// We don't want image content here, just make Docker pulling the image till end
-		io.Copy(ioutil.Discard, reader)
+		io.Copy(io.Discard, reader)
 	}
 
 	return newDockerContainer(name, image, cmdOverride, detached, trace), nil
@@ -275,7 +275,7 @@ func getDockerPID(path string) (int, error) {
 		path = dockerDefaultPIDPath
 	}
 
-	buf, err := ioutil.ReadFile(path)
+	buf, err := os.ReadFile(path)
 	if err != nil {
 		return 0, errors.Wrap(err, "could not read Docker pid file")
 	}
