@@ -1,11 +1,11 @@
 module github.com/estesp/bucketbench
 
-go 1.17
+go 1.19
 
 require (
-	github.com/containerd/cgroups v1.0.4
-	github.com/containerd/containerd v1.6.15
-	github.com/docker/docker v20.10.17+incompatible
+	github.com/containerd/cgroups v1.1.0
+	github.com/containerd/containerd v1.6.18
+	github.com/docker/docker v23.0.1+incompatible
 	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/montanaflynn/stats v0.0.0-20170404204349-41c34e4914ec
 	github.com/pkg/errors v0.9.1

@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	dockerContainerStopTimeout = 30 * time.Second
+	dockerContainerStopTimeout = 30
 	dockerDefaultPIDPath       = "/var/run/docker.pid"
 	// dockerStreamingCopySize is an approximate response size of stat call via Docker API
 	dockerStreamingCopySize = 2048
@@ -165,7 +165,10 @@ func (d *DockerDriver) Stop(ctx context.Context, ctr Container) (string, time.Du
 	start := time.Now()
 
 	timeout := dockerContainerStopTimeout
-	if err := d.client.ContainerStop(ctx, ctr.Name(), &timeout); err != nil {
+	stop := container.StopOptions{
+		Timeout: &timeout,
+	}
+	if err := d.client.ContainerStop(ctx, ctr.Name(), stop); err != nil {
 		return "", 0, errors.Wrapf(err, "failed to stop container '%s'", ctr.Name())
 	}
 
