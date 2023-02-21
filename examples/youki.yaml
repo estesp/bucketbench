@@ -1,0 +1,13 @@
+name: BasicBench
+image: busybox:latest
+rootfs: /home/ubuntu/busybox
+detached: true
+drivers:
+  -
+    type: Youki
+    threads: 5
+    iterations: 50
+commands:
+  - run
+  - stop
+  - remove

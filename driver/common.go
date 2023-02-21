@@ -31,6 +31,10 @@ const (
 	// Null driver represents an empty driver for use by benchmarks that
 	// require no driver
 	Null
+	// CRun represents the crun-based(c++) driver implementation
+	CRun
+	// Youki represents the youki-based(rust) driver information
+	Youki
 )
 
 // Container represents a generic container instance on any container engine
@@ -125,6 +129,10 @@ func New(ctx context.Context, config *Config) (Driver, error) {
 	switch config.DriverType {
 	case Runc:
 		return NewRuncDriver(config.Path)
+	case CRun:
+		return NewCRunDriver(config.Path)
+	case Youki:
+		return NewYoukiDriver(config.Path)
 	case DockerCLI:
 		return NewDockerCLIDriver(ctx, config)
 	case Docker:
@@ -155,6 +163,10 @@ func (driverType Type) String() string {
 		return "Ctr"
 	case Runc:
 		return "Runc"
+	case CRun:
+		return "CRun"
+	case Youki:
+		return "Youki"
 	case CRI:
 		return "CRI"
 	default:
@@ -176,6 +188,10 @@ func StringToType(dtype string) Type {
 		driverType = Ctr
 	case "Runc":
 		driverType = Runc
+	case "CRun":
+		driverType = CRun
+	case "Youki":
+		driverType = Youki
 	case "CRI":
 		driverType = CRI
 	default:
