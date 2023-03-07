@@ -26,11 +26,11 @@ import (
 
 	"github.com/estesp/bucketbench/benches"
 	"github.com/estesp/bucketbench/driver"
-	"github.com/go-yaml/yaml"
 	"github.com/montanaflynn/stats"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	yaml "gopkg.in/yaml.v3"
 )
 
 const (

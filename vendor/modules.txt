@@ -152,9 +152,6 @@ github.com/docker/go-units
 ## explicit; go 1.12
 github.com/go-ole/go-ole
 github.com/go-ole/go-ole/oleutil
-# github.com/go-yaml/yaml v2.1.0+incompatible
-## explicit
-github.com/go-yaml/yaml
 # github.com/godbus/dbus/v5 v5.0.6
 ## explicit; go 1.12
 github.com/godbus/dbus/v5
@@ -367,6 +364,9 @@ google.golang.org/protobuf/types/descriptorpb
 google.golang.org/protobuf/types/known/anypb
 google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/timestamppb
+# gopkg.in/yaml.v3 v3.0.1
+## explicit
+gopkg.in/yaml.v3
 # k8s.io/cri-api v0.25.4
 ## explicit; go 1.19
 k8s.io/cri-api/pkg/apis/runtime/v1alpha2

@@ -6,13 +6,13 @@ require (
 	github.com/containerd/cgroups v1.1.0
 	github.com/containerd/containerd v1.6.18
 	github.com/docker/docker v23.0.1+incompatible
-	github.com/go-yaml/yaml v2.1.0+incompatible
 	github.com/montanaflynn/stats v0.0.0-20170404204349-41c34e4914ec
 	github.com/pkg/errors v0.9.1
 	github.com/shirou/gopsutil v0.0.0-20180916084002-77e5abb6f06f
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.0.0
 	google.golang.org/grpc v1.50.1
+	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/cri-api v0.25.4
 )
 
