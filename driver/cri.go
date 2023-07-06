@@ -169,7 +169,11 @@ func (c *CRIDriver) Create(ctx context.Context, name, image, cmdOverride string,
 		}
 	}
 
-	pconfig := pconfigGlobal
+	var pconfig pb.PodSandboxConfig
+	err := deepCopy(&pconfig, pconfigGlobal)
+	if err != nil {
+		return nil, err
+	}
 	pconfig.Metadata.Name = defaultPodNamePrefix + name
 
 	podInfo, err := (*c.runtimeClient).RunPodSandbox(ctx, &pb.RunPodSandboxRequest{Config: &pconfig})
@@ -217,13 +221,21 @@ func (c CRIDriver) Clean(ctx context.Context) error {
 
 // Run will execute a container using the driver
 func (c *CRIDriver) Run(ctx context.Context, ctr Container) (string, time.Duration, error) {
-	start := time.Now()
-	cconfig := cconfigGlobal
-	pconfig := pconfigGlobal
+	var pconfig pb.PodSandboxConfig
+	var cconfig pb.ContainerConfig
+	err := deepCopy(&pconfig, pconfigGlobal)
+	if err != nil {
+		return "", 0, err
+	}
+	err = deepCopy(&cconfig, cconfigGlobal)
+	if err != nil {
+		return "", 0, err
+	}
 	cconfig.Metadata.Name = ctr.Name()
 	pconfig.Metadata.Name = defaultPodNamePrefix + cconfig.Metadata.Name
+	start := time.Now()
 
-	_, err := (*c.runtimeClient).CreateContainer(ctx, &pb.CreateContainerRequest{PodSandboxId: ctr.GetPodID(), Config: &cconfig, SandboxConfig: &pconfig})
+	_, err = (*c.runtimeClient).CreateContainer(ctx, &pb.CreateContainerRequest{PodSandboxId: ctr.GetPodID(), Config: &cconfig, SandboxConfig: &pconfig})
 	if err != nil {
 		return "", 0, err
 	}
@@ -357,4 +369,16 @@ func loadContainerConfig(path string) (pb.ContainerConfig, error) {
 		return pb.ContainerConfig{}, err
 	}
 	return cconfigGlobal, nil
+}
+
+func deepCopy(dst, src interface{}) error {
+	data, err := json.Marshal(src)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(data, dst)
+	if err != nil {
+		return err
+	}
+	return nil
 }
