@@ -113,7 +113,7 @@ The following commands are accepted as input:
  - **unpause**: (aliases: **resume**) resume a paused container
  - **stop**: (aliases: **kill**) stop/kill the running container processes
  - **remove**: (aliases: **erase**,**delete**) remove/delete a container instance
- - **metrics**: (aliases: **stats**) query container daemon stats. Note: if `streamStats = true`, each **metrics** command will spawn separate goroutine and will stream metrics untill end of iteration.
+ - **metrics**: (aliases: **stats**) query container daemon stats. Note: if `streamStats = true`, each **metrics** command will spawn separate goroutine and will stream metrics until end of iteration.
  - **wait**: wait for container stop
 
 Note that `bucketbench` is not handling any formal state validation on the list
