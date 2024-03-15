@@ -14,9 +14,9 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v5
         with:
-          go-version: 1.20.x
+          go-version: 1.22.x
 
       - name: Set env
         shell: bash
@@ -24,7 +24,7 @@ jobs:
           echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
           echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: src/github.com/estesp/bucketbench
           fetch-depth: 25
@@ -32,14 +32,12 @@ jobs:
       - name: Linter
         uses: golangci/golangci-lint-action@v3
         with:
-          version: v1.51.1
+          version: v1.55.2
           skip-cache: true
           working-directory: src/github.com/estesp/bucketbench
 
       - name: Install dependencies
-        env:
-          GO111MODULE: off
-        run: go get -u github.com/vbatts/git-validation
+        run: go install github.com/vbatts/git-validation@latest
 
       - name: DCO
         env:

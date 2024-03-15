@@ -22,18 +22,18 @@ type LimitBench struct {
 }
 
 // Init initializes the benchmark
-func (lb *LimitBench) Init(ctx context.Context, name string, driverType driver.Type, binaryPath, imageInfo, cmdOverride string, trace bool) error {
+func (lb *LimitBench) Init(_ context.Context, _ string, _ driver.Type, _, _, _ string, _ bool) error {
 	return nil
 }
 
 // Validate the unit of benchmark execution
-func (lb *LimitBench) Validate(ctx context.Context) error {
+func (lb *LimitBench) Validate(_ context.Context) error {
 	return nil
 }
 
 // Run executes the benchmark iterations against a specific engine driver type
 // for a specified number of iterations
-func (lb *LimitBench) Run(ctx context.Context, threads, iterations int, commands []string) error {
+func (lb *LimitBench) Run(ctx context.Context, threads, iterations int, _ []string) error {
 	log.Infof("Start LimitBench run: threads (%d); iterations (%d)", threads, iterations)
 	statChan := make([]chan RunStatistics, threads)
 	for i := range statChan {
@@ -94,6 +94,6 @@ func (lb *LimitBench) Type() Type {
 }
 
 // Info returns a string with the driver type and custom benchmark name
-func (lb *LimitBench) Info(ctx context.Context) (string, error) {
+func (lb *LimitBench) Info(_ context.Context) (string, error) {
 	return "Limit benchmark: No driver", nil
 }

@@ -122,12 +122,12 @@ func (r *CtrDriver) PID() (int, error) {
 }
 
 // Wait blocks thread until container stop
-func (r *CtrDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
+func (r *CtrDriver) Wait(_ context.Context, _ Container) (string, time.Duration, error) {
 	return "", 0, errors.New("not implemented")
 }
 
 // Stats returns stats data from daemon for container
-func (r *CtrDriver) Stats(ctx context.Context, ctr Container) (io.ReadCloser, error) {
+func (r *CtrDriver) Stats(_ context.Context, _ Container) (io.ReadCloser, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -154,7 +154,7 @@ func (r *CtrDriver) Info(ctx context.Context) (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (r *CtrDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+func (r *CtrDriver) Create(_ context.Context, name, image, _ string, _ bool, trace bool) (Container, error) {
 	return newCtrContainer(name, image, trace), nil
 }
 

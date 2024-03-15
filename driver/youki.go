@@ -123,12 +123,12 @@ func (r *YoukiDriver) PID() (int, error) {
 }
 
 // Wait will block until container stop
-func (r *YoukiDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
+func (r *YoukiDriver) Wait(_ context.Context, _ Container) (string, time.Duration, error) {
 	return "", 0, errors.New("not implemented")
 }
 
 // Stats returns stats data from daemon for container
-func (r *YoukiDriver) Stats(ctx context.Context, ctr Container) (io.ReadCloser, error) {
+func (r *YoukiDriver) Stats(_ context.Context, _ Container) (io.ReadCloser, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -149,7 +149,7 @@ func (r *YoukiDriver) Info(ctx context.Context) (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (r *YoukiDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+func (r *YoukiDriver) Create(_ context.Context, name, image, _ string, _ bool, _ bool) (Container, error) {
 	return newYoukiContainer(name, image, false, false), nil
 }
 

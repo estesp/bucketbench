@@ -1,7 +1,5 @@
 linters:
   enable:
-    - structcheck
-    - varcheck
     - staticcheck
     - unconvert
     - gofmt
@@ -27,4 +25,4 @@ issues:
         - gosec
 
 run:
-  timeout: 2m
+  timeout: 3m
