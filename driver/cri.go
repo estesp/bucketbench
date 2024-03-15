@@ -12,11 +12,11 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-	pb "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
+	pb "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
 
 const (
-	defaultPodImage        = "k8s.gcr.io/pause:3.1"
+	defaultPodImage        = "registry.k8s.io/pause:3.5"
 	defaultPodNamePrefix   = "pod"
 	defaultSandboxConfig   = "contrib/sandbox_config.json"
 	defaultContainerConfig = "contrib/container_config.json"
@@ -156,7 +156,7 @@ func (c *CRIDriver) Path() string {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (c *CRIDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+func (c *CRIDriver) Create(ctx context.Context, name, image, cmdOverride string, _ bool, trace bool) (Container, error) {
 	if status, err := (*c.imageClient).ImageStatus(ctx, &pb.ImageStatusRequest{Image: &pb.ImageSpec{Image: image}}); err != nil || status.Image == nil {
 		if _, err := (*c.imageClient).PullImage(ctx, &pb.PullImageRequest{Image: &pb.ImageSpec{Image: image}}); err != nil {
 			return nil, err
@@ -298,13 +298,13 @@ func (c *CRIDriver) Remove(ctx context.Context, ctr Container) (string, time.Dur
 
 // Pause will pause a container
 // not supported in CRI API
-func (c *CRIDriver) Pause(ctx context.Context, ctr Container) (string, time.Duration, error) {
+func (c *CRIDriver) Pause(_ context.Context, _ Container) (string, time.Duration, error) {
 	return "", 0, nil
 }
 
 // Unpause will unpause/resume a container
 // not supported in CRI API
-func (c *CRIDriver) Unpause(ctx context.Context, ctr Container) (string, time.Duration, error) {
+func (c *CRIDriver) Unpause(_ context.Context, _ Container) (string, time.Duration, error) {
 	return "", 0, nil
 }
 
@@ -320,12 +320,12 @@ func (c *CRIDriver) PID() (int, error) {
 }
 
 // Wait blocks thread until container stop
-func (c *CRIDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
+func (c *CRIDriver) Wait(_ context.Context, _ Container) (string, time.Duration, error) {
 	return "", 0, errors.New("not implemented")
 }
 
 // Stats returns stats data from daemon for container
-func (c *CRIDriver) Stats(ctx context.Context, ctr Container) (io.ReadCloser, error) {
+func (c *CRIDriver) Stats(_ context.Context, _ Container) (io.ReadCloser, error) {
 	return nil, errors.New("not implemented")
 }
 

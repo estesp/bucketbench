@@ -123,12 +123,12 @@ func (r *RuncDriver) PID() (int, error) {
 }
 
 // Wait will block until container stop
-func (r *RuncDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
+func (r *RuncDriver) Wait(_ context.Context, _ Container) (string, time.Duration, error) {
 	return "", 0, errors.New("not implemented")
 }
 
 // Stats returns stats data from daemon for container
-func (r *RuncDriver) Stats(ctx context.Context, ctr Container) (io.ReadCloser, error) {
+func (r *RuncDriver) Stats(_ context.Context, _ Container) (io.ReadCloser, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -149,7 +149,7 @@ func (r *RuncDriver) Info(ctx context.Context) (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (r *RuncDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+func (r *RuncDriver) Create(_ context.Context, name, image, _ string, detached bool, trace bool) (Container, error) {
 	return newRuncContainer(name, image, detached, trace), nil
 }
 

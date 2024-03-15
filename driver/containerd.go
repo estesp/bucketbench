@@ -251,7 +251,7 @@ func (r *ContainerdDriver) Info(ctx context.Context) (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (r *ContainerdDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+func (r *ContainerdDriver) Create(ctx context.Context, name, image, cmdOverride string, _ bool, trace bool) (Container, error) {
 	ctx = namespaces.WithNamespace(ctx, containerdNamespace)
 
 	// we need to convert the bare Docker image name to a fully resolved
@@ -261,7 +261,7 @@ func (r *ContainerdDriver) Create(ctx context.Context, name, image, cmdOverride 
 	if _, err := r.client.GetImage(ctx, fullImageName); err != nil {
 		// if the image isn't already in our namespaced context, then pull it
 		// using the reference and default resolver (most likely DockerHub)
-		if _, err := r.client.Pull(ctx, fullImageName, containerd.WithPullUnpack, containerd.WithSchema1Conversion); err != nil {
+		if _, err := r.client.Pull(ctx, fullImageName, containerd.WithPullUnpack); err != nil {
 			// error pulling the image
 			return nil, err
 		}

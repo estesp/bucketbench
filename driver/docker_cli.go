@@ -162,7 +162,7 @@ func (d *DockerCLIDriver) Info(ctx context.Context) (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (d *DockerCLIDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+func (d *DockerCLIDriver) Create(_ context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
 	return newDockerContainer(name, image, cmdOverride, detached, trace), nil
 }
 

@@ -123,12 +123,12 @@ func (r *CRunDriver) PID() (int, error) {
 }
 
 // Wait will block until container stop
-func (r *CRunDriver) Wait(ctx context.Context, ctr Container) (string, time.Duration, error) {
+func (r *CRunDriver) Wait(_ context.Context, _ Container) (string, time.Duration, error) {
 	return "", 0, errors.New("not implemented")
 }
 
 // Stats returns stats data from daemon for container
-func (r *CRunDriver) Stats(ctx context.Context, ctr Container) (io.ReadCloser, error) {
+func (r *CRunDriver) Stats(_ context.Context, _ Container) (io.ReadCloser, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -149,7 +149,7 @@ func (r *CRunDriver) Info(ctx context.Context) (string, error) {
 
 // Create will create a container instance matching the specific needs
 // of a driver
-func (r *CRunDriver) Create(ctx context.Context, name, image, cmdOverride string, detached bool, trace bool) (Container, error) {
+func (r *CRunDriver) Create(_ context.Context, name, image, _ string, detached bool, _ bool) (Container, error) {
 	return newCRunContainer(name, image, detached, false), nil
 }
 
