@@ -7,7 +7,7 @@ toolchain go1.22.1
 require (
 	github.com/containerd/cgroups v1.1.0
 	github.com/containerd/containerd v1.7.14
-	github.com/docker/docker v24.0.7+incompatible
+	github.com/docker/docker v24.0.9+incompatible
 	github.com/montanaflynn/stats v0.0.0-20170404204349-41c34e4914ec
 	github.com/pkg/errors v0.9.1
 	github.com/shirou/gopsutil v0.0.0-20180916084002-77e5abb6f06f
