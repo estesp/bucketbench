@@ -7,7 +7,7 @@ toolchain go1.22.1
 require (
 	github.com/containerd/cgroups v1.1.0
 	github.com/containerd/containerd v1.7.14
-	github.com/docker/docker v24.0.9+incompatible
+	github.com/docker/docker v25.0.6+incompatible
 	github.com/montanaflynn/stats v0.0.0-20170404204349-41c34e4914ec
 	github.com/pkg/errors v0.9.1
 	github.com/shirou/gopsutil v0.0.0-20180916084002-77e5abb6f06f
@@ -30,7 +30,7 @@ require (
 	github.com/containerd/ttrpc v1.2.3 // indirect
 	github.com/containerd/typeurl/v2 v2.1.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/docker/distribution v2.8.2+incompatible // indirect
+	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.4.1-0.20190612165340-fd1b1942c4d5 // indirect
 	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
 	github.com/docker/go-units v0.5.0 // indirect
