@@ -235,10 +235,15 @@ func (c *CRIDriver) Run(ctx context.Context, ctr Container) (string, time.Durati
 	pconfig.Metadata.Name = defaultPodNamePrefix + cconfig.Metadata.Name
 	start := time.Now()
 
-	_, err = (*c.runtimeClient).CreateContainer(ctx, &pb.CreateContainerRequest{PodSandboxId: ctr.GetPodID(), Config: &cconfig, SandboxConfig: &pconfig})
+	cRes, err := (*c.runtimeClient).CreateContainer(ctx, &pb.CreateContainerRequest{PodSandboxId: ctr.GetPodID(), Config: &cconfig, SandboxConfig: &pconfig})
 	if err != nil {
 		return "", 0, err
 	}
+	_, err = (*c.runtimeClient).StartContainer(ctx, &pb.StartContainerRequest{ContainerId: cRes.ContainerId})
+	if err != nil {
+		return "", 0, err
+	}
+
 	elapsed := time.Since(start)
 	return "", elapsed, nil
 }
